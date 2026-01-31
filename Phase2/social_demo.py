@@ -6,7 +6,7 @@ async def main():
     """Demo: Analyze a group chat to find influencers and communities"""
     
     print("="*80)
-    print("🔍 Social Network Analysis Demo")
+    print("Social Network Analysis Demo")
     print("="*80)
     
     # Sample group chat data
@@ -43,32 +43,32 @@ async def main():
     
     # Print results
     print("\n" + "="*80)
-    print("📊 Social Network Statistics")
+    print("Social Network Statistics")
     print("="*80)
-    print(f"\n👥 Total Participants: {stats['total_people']}")
-    print(f"💬 Total Messages: {stats['total_messages']}")
-    print(f"🏷️  Topics Discussed: {stats['total_topics']}")
+    print(f"Total Participants: {stats['total_people']}")
+    print(f"Total Messages: {stats['total_messages']}")
+    print(f"Topics Discussed: {stats['total_topics']}")
     
-    print("\n🌟 TOP INFLUENCERS (Decision Makers):")
+    print("\nTOP INFLUENCERS (Decision Makers):")
     for person in stats['influencers']:
         print(f"   • {person['name']} - Influence Score: {person['score']:.3f}")
     
-    print("\n🔗 INFO BROKERS (Information Flows Through):")
+    print("\nINFO BROKERS (Information Flows Through):")
     for person in stats['info_brokers']:
         print(f"   • {person['name']} - Broker Score: {person['score']:.3f}")
     
-    print("\n💪 MOST ACTIVE:")
+    print("\nMOST ACTIVE:")
     for person in stats['most_active']:
         print(f"   • {person['name']} - {person['messages']} messages")
     
     # Get detailed influence report
     print("\n" + "="*80)
-    print("📈 Detailed Influence Report")
+    print("Detailed Influence Report")
     print("="*80)
     
     report = builder.get_influence_report()
     for person_data in report:
-        print(f"\n👤 {person_data['name']}:")
+        print(f"\n{person_data['name']}:")
         print(f"   Messages Sent: {person_data['message_count']}")
         print(f"   Replies Received: {person_data['replies_received']}")
         print(f"   Influence (PageRank): {person_data['pagerank']:.3f}")
@@ -76,16 +76,16 @@ async def main():
         
         badges = []
         if person_data['is_influencer']:
-            badges.append("🌟 INFLUENCER")
+            badges.append("INFLUENCER")
         if person_data['is_info_broker']:
-            badges.append("🔗 INFO BROKER")
+            badges.append("INFO BROKER")
         if badges:
             print(f"   Status: {' | '.join(badges)}")
         print(f"   Community: {person_data['community']}")
     
     # Visualize
     print("\n" + "="*80)
-    print("🎨 Creating Visualization")
+    print("Creating Visualization")
     print("="*80)
     
     html_file = builder.visualize("output/social_network.html")
@@ -94,11 +94,11 @@ async def main():
     builder.save_graph("output/social_network.graphml")
     
     print("\n" + "="*80)
-    print("✅ Analysis Complete!")
+    print("Analysis Complete!")
     print("="*80)
-    print(f"\n🌐 Open '{html_file}' to explore the social network!")
-    print(f"💾 Graph data saved to 'output/social_network.graphml'")
-    print("\n💡 Key Insights:")
+    print(f"\nOpen '{html_file}' to explore the social network!")
+    print(f"Graph data saved to 'output/social_network.graphml'")
+    print("\nKey Insights:")
     print("   • Larger nodes = More influential")
     print("   • Yellow arrows = Replies")
     print("   • Teal nodes = People")

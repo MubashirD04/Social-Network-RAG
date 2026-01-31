@@ -31,7 +31,7 @@ class SocialGraphBuilder:
         # 2. Add Person and Message Nodes
         people = set()
         person_to_last_msg = {} # Track last message per person for reply inference
-        print("\n👥 Building social network...")
+        print("\nBuilding social network...")
         
         for msg in messages:
             # Person Node
@@ -174,7 +174,7 @@ class SocialGraphBuilder:
         print(f"   Added {len(people)} participants and {len(messages)} messages")
 
         # 3. Topic Extraction (Async)
-        print("\n🧠 Extracting topics...")
+        print("\nExtracting topics...")
         msg_texts = [f"{m.sender}: {m.content}" for m in messages]
         topics = await self.llm.extract_topics(msg_texts)
         
@@ -203,7 +203,7 @@ class SocialGraphBuilder:
         return self._calculate_stats()
     
     def _calculate_stats(self):
-        print("\n📊 Calculating social metrics...")
+        print("\nCalculating social metrics...")
         
         # Create a simplified person-to-person interaction graph for metrics
         interaction_graph = nx.DiGraph()
@@ -308,7 +308,7 @@ class SocialGraphBuilder:
         if not nodes or graph.number_of_nodes() == 0:
             return
 
-        print("\n🏘️ Detecting social communities...")
+        print("\nDetecting social communities...")
         try:
             # Undirected for community detection
             undirected_graph = graph.to_undirected()
@@ -433,7 +433,7 @@ class SocialGraphBuilder:
             label:hover { color: #4ECDC4; }
         </style>
 
-        <button id="sidebar-toggle" onclick="toggleSidebar()">📊 Open Controls</button>
+        <button id="sidebar-toggle" onclick="toggleSidebar()">Open Controls</button>
 
         <div id="social-sidebar">
             <button class="close-btn" onclick="toggleSidebar()">&times;</button>
@@ -462,11 +462,11 @@ class SocialGraphBuilder:
 
             <div id="legend-box">
                 <h3>Key / Legend</h3>
-                <div class="legend-item"><span class="badge badge-influencer">🌟 INFLUENCER</span><br><small>High score. Key decision makers.</small></div>
-                <div class="legend-item"><span class="badge badge-broker">🔗 BROKER</span><br><small>Bridge nodes connecting groups.</small></div>
+                <div class="legend-item"><span class="badge badge-influencer">INFLUENCER</span><br><small>High score. Key decision makers.</small></div>
+                <div class="legend-item"><span class="badge badge-broker">BROKER</span><br><small>Bridge nodes connecting groups.</small></div>
                 <div class="legend-item"><span class="legend-icon" style="background:#4ECDC4"></span> <strong>Person</strong></div>
                 <div class="legend-item"><span class="legend-icon" style="background:#FFD93D; transform: rotate(45deg);"></span> <strong>Topic</strong></div>
-                <div class="legend-item"><span style="color:#FFD93D">➡ Yellow Arrow</span><small> Reply chain</small></div>
+                <div class="legend-item"><span style="color:#FFD93D">Yellow Arrow</span><small> Reply chain</small></div>
             </div>
         </div>
 
@@ -475,7 +475,7 @@ class SocialGraphBuilder:
                 const sidebar = document.getElementById('social-sidebar');
                 const btn = document.getElementById('sidebar-toggle');
                 sidebar.classList.toggle('open');
-                btn.innerText = sidebar.classList.contains('open') ? '❌ Close Controls' : '📊 Open Controls';
+                btn.innerText = sidebar.classList.contains('open') ? 'Close Controls' : 'Open Controls';
             }
 
             // Ensure network is ready
@@ -499,8 +499,8 @@ class SocialGraphBuilder:
                         
                         if (node.type === 'person') {
                             let badgesHtml = "";
-                            if (node.is_influencer) badgesHtml += '<span class="badge badge-influencer">🌟 INFLUENCER</span>';
-                            if (node.is_info_broker) badgesHtml += '<span class="badge badge-broker">🔗 BROKER</span>';
+                            if (node.is_influencer) badgesHtml += '<span class="badge badge-influencer">INFLUENCER</span>';
+                            if (node.is_info_broker) badgesHtml += '<span class="badge badge-broker">BROKER</span>';
                             badgeEl.innerHTML = badgesHtml;
                             
                             statsEl.innerHTML = `
