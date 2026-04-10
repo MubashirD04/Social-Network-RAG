@@ -1,7 +1,8 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.social_graph_builder import SocialGraphBuilder, Message
+from src.social_graph_builder import SocialGraphBuilder
+from src.social_models import Message
 from datetime import datetime, timedelta
 import asyncio
 import random

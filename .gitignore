@@ -2,3 +2,4 @@ docs/
 lib/
 .env
 output/
+venv/

@@ -1,0 +1,12 @@
+networkx
+pyvis
+pydantic
+keybert
+sentence-transformers
+fastapi
+uvicorn
+python-multipart
+pytest
+numpy
+mcp
+httpx

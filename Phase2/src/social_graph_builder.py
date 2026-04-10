@@ -11,7 +11,7 @@ from networkx.algorithms import community
 class SocialGraphBuilder:
     def __init__(self):
         self.graph = nx.DiGraph() # Directed graph for detailed interactions
-        self.llm = LLMService(None)
+        self.llm = LLMService()
         
     async def process_chat_data(self, messages: List[Message], chat_name: str):
         print(f"\n{'='*80}")
