@@ -20,7 +20,12 @@ dist/
 build/
 *.egg-info/
 
+# Logs
+*.log
+
 # Project Specific
 get-pip.py
-docs/
 lib/
+# Deny docs/ if user wants them local only, but usually they are checked in.
+# User added them manually, so keeping for now.
+docs/
