@@ -9,9 +9,10 @@ This project identifies key influencers, information brokers, and community clus
 ## Project Flow
 
 The system operates in a structured pipeline:
+
 1.  **Ingestion**: Raw exports from WhatsApp (.txt), Telegram (.json), or Slack (.zip) are parsed and normalized into a standard message schema.
 2.  **Graph Construction**: Builds a directed graph of social interactions (Replies, Mentions, Reactions).
-3.  **Local Analysis**: 
+3.  **Local Analysis**:
     - **KeyBERT**: Extracts main conversation topics locally.
     - **NetworkX**: Calculates PageRank (Influence) and Betweenness Centrality (Info Brokers).
     - **Greedy Modularity**: Detects community clusters/sub-groups.
@@ -50,11 +51,12 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-## 🚀 Phase 5: Modern React Web UI
+## Phase 5: Modern React Web UI
 
 The project now includes a high-performance React dashboard powered by Vite.
 
 ### Development Setup
+
 1. **Frontend**:
    ```bash
    cd Phase2/frontend
@@ -69,13 +71,15 @@ The project now includes a high-performance React dashboard powered by Vite.
    ```
 
 ### Production Build
+
 The backend is configured to serve the built frontend from `Phase2/frontend/dist`. To rebuild:
+
 ```bash
 cd Phase2/frontend
 npm run build
 ```
 
-## 🛠️ Testing on Linux
+## Testing on Linux
 
 Since Claude Desktop is currently unavailable on Linux, we recommend using the **MCP Inspector** or **Cursor** to test and interact with the server.
 
@@ -86,6 +90,7 @@ The MCP Inspector provides a local web UI to test tools and resources without an
 **Requirements**: Node.js installed on your system.
 
 **How to run**:
+
 1.  **Start the FastAPI Backend**:
     ```bash
     export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2
@@ -111,6 +116,7 @@ Cursor is a fork of VS Code that supports MCP natively on Linux.
 ### 3. Using Goose (CLI Agent)
 
 If you prefer a terminal-based agent:
+
 1.  Install Goose: `curl -fsSL https://goose.b7s.ai/install.sh | sh`
 2.  Add the server to `~/.config/goose/config.yaml`.
 
@@ -119,11 +125,14 @@ If you prefer a terminal-based agent:
 For users on macOS or Windows, you can connect this tool directly to **Claude Desktop**.
 
 ### 1. Locate your Paths
+
 You will need the absolute paths to your virtual environment's Python executable and the `Phase2` directory:
+
 - **Python Path**: `path/to/Social-Network-RAG/venv/bin/python3`
 - **Server Script**: `path/to/Social-Network-RAG/Phase2/mcp_server/server.py`
 
 ### 2. Configure Claude Desktop
+
 Open your Claude Desktop configuration file (usually `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
 
 ```json
@@ -131,9 +140,7 @@ Open your Claude Desktop configuration file (usually `~/Library/Application Supp
   "mcpServers": {
     "social-rag": {
       "command": "/path/to/your/venv/bin/python3",
-      "args": [
-        "/path/to/your/Phase2/mcp_server/server.py"
-      ],
+      "args": ["/path/to/your/Phase2/mcp_server/server.py"],
       "env": {
         "PYTHONPATH": "/path/to/your/Phase2"
       }
@@ -143,8 +150,8 @@ Open your Claude Desktop configuration file (usually `~/Library/Application Supp
 ```
 
 ### 3. Restart Claude
-After restarting, you should see the `SocialNetworkRAG` tools available in the paperclip menu or via slash commands.
 
+After restarting, you should see the `SocialNetworkRAG` tools available in the paperclip menu or via slash commands.
 
 ## Developer Tools
 
