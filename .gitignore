@@ -21,6 +21,7 @@ dist/
 build/
 *.egg-info/
 
+
 # Logs
 *.log
 
@@ -38,4 +39,4 @@ node_modules/
 *.swo
 
 # Documentation - Keep by default
-docs/
+!docs/
