@@ -50,14 +50,78 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-## MCP Server Integration
+## 🚀 Phase 5: Modern React Web UI
 
-The MCP server allows you to connect this tool to the **Claude Desktop** app or any other MCP-compatible client.
+The project now includes a high-performance React dashboard powered by Vite.
+
+### Development Setup
+1. **Frontend**:
+   ```bash
+   cd Phase2/frontend
+   npm install
+   npm run dev
+   ```
+2. **Backend**:
+   ```bash
+   # In a separate terminal
+   export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2
+   ./venv/bin/python3 Phase2/api/main.py
+   ```
+
+### Production Build
+The backend is configured to serve the built frontend from `Phase2/frontend/dist`. To rebuild:
+```bash
+cd Phase2/frontend
+npm run build
+```
+
+## 🛠️ Testing on Linux
+
+Since Claude Desktop is currently unavailable on Linux, we recommend using the **MCP Inspector** or **Cursor** to test and interact with the server.
+
+### 1. Using MCP Inspector (Recommended for Debugging)
+
+The MCP Inspector provides a local web UI to test tools and resources without an AI client.
+
+**Requirements**: Node.js installed on your system.
+
+**How to run**:
+1.  **Start the FastAPI Backend**:
+    ```bash
+    export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2
+    uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    ```
+2.  **In a second terminal, launch the Inspector**:
+    ```bash
+    npx @modelcontextprotocol/inspector python Phase2/mcp_server/server.py
+    ```
+3.  Open the URL provided (usually `http://localhost:3000`) in your browser. You can now trigger tools like `analyse_chat` directly.
+
+### 2. Using Cursor (IDE)
+
+Cursor is a fork of VS Code that supports MCP natively on Linux.
+
+1.  Open Cursor Settings > **Models** > **MCP Servers**.
+2.  Add a new server:
+    - **Name**: `social-rag`
+    - **Type**: `command`
+    - **Command**: `path/to/your/venv/bin/python3 Phase2/mcp_server/server.py`
+3.  Set the Environment Variable `PYTHONPATH` to the absolute path of the `Phase2` directory.
+
+### 3. Using Goose (CLI Agent)
+
+If you prefer a terminal-based agent:
+1.  Install Goose: `curl -fsSL https://goose.b7s.ai/install.sh | sh`
+2.  Add the server to `~/.config/goose/config.yaml`.
+
+## Integration (macOS/Windows)
+
+For users on macOS or Windows, you can connect this tool directly to **Claude Desktop**.
 
 ### 1. Locate your Paths
-You will need the absolute paths to your virtual environment's Python executable and the MCP server script:
+You will need the absolute paths to your virtual environment's Python executable and the `Phase2` directory:
 - **Python Path**: `path/to/Social-Network-RAG/venv/bin/python3`
-- **Server Script**: `path/to/Social-Network-RAG/Phase2/mcp/server.py`
+- **Server Script**: `path/to/Social-Network-RAG/Phase2/mcp_server/server.py`
 
 ### 2. Configure Claude Desktop
 Open your Claude Desktop configuration file (usually `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
@@ -68,7 +132,7 @@ Open your Claude Desktop configuration file (usually `~/Library/Application Supp
     "social-rag": {
       "command": "/path/to/your/venv/bin/python3",
       "args": [
-        "/path/to/your/Phase2/mcp/server.py"
+        "/path/to/your/Phase2/mcp_server/server.py"
       ],
       "env": {
         "PYTHONPATH": "/path/to/your/Phase2"
@@ -79,28 +143,8 @@ Open your Claude Desktop configuration file (usually `~/Library/Application Supp
 ```
 
 ### 3. Restart Claude
-After restarting, you should see the `SocialNetworkRAG` tools available (e.g., `analyse_chat`, `query_chat`, `get_influencers`).
+After restarting, you should see the `SocialNetworkRAG` tools available in the paperclip menu or via slash commands.
 
-### VS Code Integration (Roo Code)
-
-If you use VS Code with the **Roo Code** extension, you can integrate this MCP server directly:
-
-1.  Open the Roo Code settings (Settings cog in the Roo Code panel).
-2.  Navigate to **MCP Servers**.
-3.  Click **Edit Settings (JSON)**.
-4.  Add the following entry to the `mcpServers` object (ensure absolute paths):
-    ```json
-    "social-rag": {
-      "command": "/path/to/your/venv/bin/python3",
-      "args": [
-        "/path/to/your/Phase2/mcp/server.py"
-      ],
-      "env": {
-        "PYTHONPATH": "/path/to/your/Phase2"
-      }
-    }
-    ```
-5.  Save and check the "MCP Server" tab in Roo Code to verify it is "Connected".
 
 ## Developer Tools
 

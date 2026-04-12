@@ -30,42 +30,45 @@ class SocialGraphBuilder:
         
         # 2. Add Person and Message Nodes
         people = set()
-        person_to_last_msg = {} # Track last message per person for reply inference
+        person_to_last_msg = {} 
         print("\nBuilding social network...")
         
         for msg in messages:
+            p_id = f"p_{msg.sender}"
+            m_id = f"m_{msg.id}"
+            
             # Person Node
             if msg.sender not in people:
                 people.add(msg.sender)
                 self.graph.add_node(
-                    msg.sender,
+                    p_id,
                     type="person",
                     label=msg.sender,
-                    title=msg.sender, # Initialize title
-                    color="#4ECDC4", # Teal
-                    size=20, # Will update later based on activity
+                    title=msg.sender,
+                    color="#4ECDC4",
+                    size=20,
                     shape="dot"
                 )
             
             # Message Node
             msg_label = f"{msg.content[:20]}..."
             self.graph.add_node(
-                msg.id,
+                m_id,
                 type="message",
                 label=msg_label,
                 title=f"{msg.sender}: {msg.content}\n{msg.timestamp}",
                 text=msg.content,
                 timestamp=msg.timestamp.isoformat(),
-                color="#A0D2EB", # Light Blue
+                color="#A0D2EB",
                 size=10,
                 shape="ellipse"
             )
             
             # EDGE: SENT (Person -> Message)
-            self.graph.add_edge(msg.sender, msg.id, relationship="SENT", color="#CCCCCC", width=1)
+            self.graph.add_edge(p_id, m_id, relationship="SENT", color="#CCCCCC", width=1)
             
             # EDGE: PART_OF (Message -> Chat)
-            self.graph.add_edge(msg.id, chat_name, relationship="PART_OF", color="#EEEEEE", width=0.5)
+            self.graph.add_edge(m_id, chat_name, relationship="PART_OF", color="#EEEEEE", width=0.5)
             
             # OPTIMIZATION: Explicit Mention Parsing using Regex
             mentions = re.findall(r'@(\w+)', msg.content)
@@ -86,11 +89,12 @@ class SocialGraphBuilder:
 
             # MENTION PARSING
             for mentioned_person in mentions:
+                mp_id = f"p_{mentioned_person}"
                 # Add node if not exists (though usually they are senders, sometimes they might not be)
                 if mentioned_person not in people:
                     people.add(mentioned_person)
                     self.graph.add_node(
-                        mentioned_person, 
+                        mp_id, 
                         type="person", 
                         label=mentioned_person, 
                         title=mentioned_person, 
@@ -101,8 +105,8 @@ class SocialGraphBuilder:
                 
                 # Create explicit MENTIONED edge
                 self.graph.add_edge(
-                    msg.id, 
-                    mentioned_person, 
+                    m_id, 
+                    mp_id, 
                     relationship="MENTIONED", 
                     color="#A58DFF", # Purple for mentions
                     width=1.5,
@@ -111,12 +115,12 @@ class SocialGraphBuilder:
                 
                 # Also infer interaction for metrics (Person -> Person)
                 if mentioned_person != msg.sender:
-                    if self.graph.has_edge(msg.sender, mentioned_person):
-                        self.graph[msg.sender][mentioned_person]['weight'] = self.graph[msg.sender][mentioned_person].get('weight', 0) + 1
+                    if self.graph.has_edge(p_id, mp_id):
+                        self.graph[p_id][mp_id]['weight'] = self.graph[p_id][mp_id].get('weight', 0) + 1
                     else:
                         self.graph.add_edge(
-                            msg.sender, 
-                            mentioned_person, 
+                            p_id, 
+                            mp_id, 
                             relationship="INTERACTS_WITH", 
                             weight=1,
                             color="rgba(255, 255, 255, 0.2)",
@@ -124,44 +128,46 @@ class SocialGraphBuilder:
                         )
 
             # EDGE: REPLIED_TO (Message -> Message)
-            if msg.reply_to and self.graph.has_node(msg.reply_to):
-                self.graph.add_edge(
-                    msg.id, 
-                    msg.reply_to, 
-                    relationship="REPLIED_TO", 
-                    color="#FFD93D", # Yellow arrows for flow
-                    width=2,
-                    title="Replying to"
-                )
-                
-                # EDGE: INTERACTS_WITH (Person -> Person inferred from reply)
-                # Find original sender
-                try: 
-                    original_sender = next(u for u, v, d in self.graph.in_edges(msg.reply_to, data=True) if d['relationship'] == 'SENT')
-                    if original_sender != msg.sender:
-                        if self.graph.has_edge(msg.sender, original_sender):
-                            self.graph[msg.sender][original_sender]['weight'] += 1
-                        else:
-                            self.graph.add_edge(
-                                msg.sender, 
-                                original_sender, 
-                                relationship="INTERACTS_WITH", 
-                                weight=1,
-                                color="rgba(255, 255, 255, 0.2)",
-                                hidden=True # Hidden in visual, used for calculation
-                            )
-                except StopIteration:
-                    pass
+            if msg.reply_to:
+                rep_id = f"m_{msg.reply_to}"
+                if self.graph.has_node(rep_id):
+                    self.graph.add_edge(
+                        m_id, 
+                        rep_id, 
+                        relationship="REPLIED_TO", 
+                        color="#FFD93D", # Yellow arrows for flow
+                        width=2,
+                        title="Replying to"
+                    )
+                    
+                    # EDGE: INTERACTS_WITH (Person -> Person inferred from reply)
+                    try: 
+                        original_sender_edge = next(u for u, v, d in self.graph.in_edges(rep_id, data=True) if d['relationship'] == 'SENT')
+                        if original_sender_edge != p_id:
+                            if self.graph.has_edge(p_id, original_sender_edge):
+                                self.graph[p_id][original_sender_edge]['weight'] += 1
+                            else:
+                                self.graph.add_edge(
+                                    p_id, 
+                                    original_sender_edge, 
+                                    relationship="INTERACTS_WITH", 
+                                    weight=1,
+                                    color="rgba(255, 255, 255, 0.2)",
+                                    hidden=True # Hidden in visual, used for calculation
+                                )
+                    except StopIteration:
+                        pass
             
             # Handle Reactions (Person -> Message)
             for reactor in msg.reactions:
+                r_id = f"p_{reactor}"
                 if reactor not in people:
                     people.add(reactor)
-                    self.graph.add_node(reactor, type="person", label=reactor, title=reactor, color="#4ECDC4", shape="dot")
+                    self.graph.add_node(r_id, type="person", label=reactor, title=reactor, color="#4ECDC4", shape="dot")
                 
                 self.graph.add_edge(
-                    reactor, 
-                    msg.id, 
+                    r_id, 
+                    m_id, 
                     relationship="REACTED_TO",
                     color="#FF8E00", # Orange
                     width=1,
@@ -169,7 +175,7 @@ class SocialGraphBuilder:
                 )
             
             # Update last message for this person
-            person_to_last_msg[msg.sender] = msg.id
+            person_to_last_msg[msg.sender] = m_id
 
         print(f"   Added {len(people)} participants and {len(messages)} messages")
 
@@ -195,7 +201,7 @@ class SocialGraphBuilder:
             # Use word boundaries \b to avoid partial matches
             for msg in messages:
                 if re.search(r'\b' + re.escape(topic) + r'\b', msg.content, re.IGNORECASE):
-                     self.graph.add_edge(msg.id, topic, relationship="MENTIONS_TOPIC", color="rgba(255, 217, 61, 0.3)", dashes=True)
+                     self.graph.add_edge(f"m_{msg.id}", topic, relationship="MENTIONS_TOPIC", color="rgba(255, 217, 61, 0.3)", dashes=True)
 
         print(f"   Identified topics: {topics}")
 

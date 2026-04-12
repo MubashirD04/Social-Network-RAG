@@ -7,7 +7,7 @@ import os
 mcp = FastMCP("SocialNetworkRAG")
 
 # Point tools to the local FastAPI instance
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 @mcp.tool()
 async def analyse_chat(file_path: str) -> dict:

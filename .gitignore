@@ -13,6 +13,7 @@ venv/
 .pytest_cache/
 .coverage
 htmlcov/
+tests/data/
 
 # Local build/output
 output/
@@ -25,7 +26,16 @@ build/
 
 # Project Specific
 get-pip.py
+test_data/
 lib/
-# Deny docs/ if user wants them local only, but usually they are checked in.
-# User added them manually, so keeping for now.
+node_modules/
+.npm/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation - Keep by default
 docs/

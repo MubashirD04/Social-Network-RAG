@@ -46,6 +46,26 @@ async def get_communities(id: str):
             communities[comm_id].append(node)
     return {"communities": communities}
 
+@router.get("/{id}/data")
+async def get_graph_data(id: str):
+    analysis = get_analysis_or_404(id)
+    builder = analysis["builder"]
+    graph = builder.graph
+    
+    nodes = []
+    for node_id, data in graph.nodes(data=True):
+        node_dict = {"id": node_id}
+        node_dict.update(data)
+        nodes.append(node_dict)
+        
+    edges = []
+    for source, target, data in graph.edges(data=True):
+        edge_dict = {"source": source, "target": target}
+        edge_dict.update(data)
+        edges.append(edge_dict)
+        
+    return {"nodes": nodes, "edges": edges}
+
 @router.get("/{id}/visualisation")
 async def get_visualisation(id: str):
     analysis = get_analysis_or_404(id)
