@@ -26,30 +26,35 @@ The system operates in a structured pipeline:
 
 ### Prerequisites
 
-- Python 3.12+
-- Recommended: A virtual environment (`venv`)
+- [uv](https://github.com/astral-sh/uv) (Fast Python package manager)
+- [just](https://github.com/casey/just) (Command runner)
+- Node.js (For frontend and MCP inspector)
 
 ### Installation
 
-1. Clone the repository.
-2. Create and activate a virtual environment:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r Phase2/requirements.txt
-   ```
-
-### Running the API
-
-The MCP server requires the backend API to be running:
-
 ```bash
-export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2
-uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+just install
 ```
+
+This will create a virtual environment via `uv`, install Python dependencies, and set up the frontend `node_modules`.
+
+### Running the System
+
+You will typically need two or three terminals:
+
+1.  **Backend API**:
+    ```bash
+    just api
+    ```
+2.  **Frontend UI**:
+    ```bash
+    just frontend
+    ```
+3.  **MCP Inspector** (for testing tools):
+    ```bash
+    just inspect
+    ```
+
 
 ## Phase 5: Modern React Web UI
 

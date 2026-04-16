@@ -53,7 +53,6 @@ Social-Network-RAG/
 │   │   └── test_api.py               # Endpoint + retrieval tests
 │   ├── archive/
 │   │   └── graph_builder.py          # Legacy — ignore
-│   ├── Dockerfile                    # API + pipeline container
 │   ├── requirements.txt
 │   └── social_demo.py
 ├── docs/
@@ -63,9 +62,7 @@ Social-Network-RAG/
 │   └── start-mcp.sh                  # Starts API + MCP Inspector
 ├── test_data/                        # Sample chat exports
 ├── output/                           # Generated HTML + GraphML
-├── docker-compose.yml                # Three-service Compose stack
 ├── Justfile                          # Local dev commands
-├── Makefile                          # Alternative to Justfile
 └── README.md
 ```
 
@@ -203,27 +200,7 @@ FastMCP server. Each tool is an async function making an HTTP call to the FastAP
 
 ---
 
-## Containerisation
 
-### Three-service Docker Compose stack
-
-| Service    | Internal port | Exposed to host | Depends on |
-| ---------- | ------------- | --------------- | ---------- |
-| `api`      | 8000          | No              | —          |
-| `frontend` | 5173          | Yes             | —          |
-| `mcp`      | (HTTP)        | Yes             | `api`      |
-
-All three share an internal Compose network. Only `frontend` and `mcp` expose ports to the host. The API is internal — frontend and MCP reach it through the Compose network.
-
-The MCP server is a **sidecar**: no logic of its own, depends on the API, startup order enforced via `depends_on`. Claude Desktop connects to it over HTTP on the exposed host port.
-
-### Model caching
-
-The sentence-transformers model (~90MB) is **not baked into the image**. On first container start the API checks a mounted volume for the model, downloads if absent, skips if present. Image stays lean; first run is slow, every subsequent start is instant. No manual user setup required.
-
-### Podman
-
-The same `docker-compose.yml` runs with `podman-compose`. No Docker Desktop license, no background daemon. Recommended for Linux users.
 
 ---
 
@@ -231,16 +208,18 @@ The same `docker-compose.yml` runs with `podman-compose`. No Docker Desktop lice
 
 ### Tooling
 
-- `uv` — virtual environment and dependency management, significantly faster than pip
-- `just` or `make` — command runner, manages API + frontend + MCP as parallel processes
+- `uv` — Unified Python tool for virtual environments and dependency management.
+- `just` — Command runner to manage API, frontend, and MCP processes.
 
 ### Commands
 
 ```bash
-just install   # uv sync + npm install in frontend/
-just start     # start all three services with correct PYTHONPATH
-just test      # pytest Phase2/tests/ -v
-just stop      # terminate managed processes
+just install   # uv venv + uv pip install + npm install
+just api       # Start FastAPI backend
+just frontend  # Start Vite development server
+just inspect   # Start MCP Inspector
+just test      # Run all tests
+just clean     # Clean up temporary files
 ```
 
 ---
