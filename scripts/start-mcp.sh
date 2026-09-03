@@ -3,7 +3,7 @@
 # Get the absolute path of the project root
 PROJECT_ROOT=$(pwd)
 PHASE2_DIR="$PROJECT_ROOT/Phase2"
-VENV_PYTHON="$PROJECT_ROOT/venv/bin/python3"
+VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python3"
 
 # Check if venv exists
 if [ ! -f "$VENV_PYTHON" ]; then

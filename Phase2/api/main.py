@@ -11,7 +11,10 @@ app = FastAPI(title="Social Network RAG API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    # No auth/cookies exist in this API. allow_credentials=True combined with
+    # a wildcard origin lets browsers echo back any Origin for credentialed
+    # requests, so keep it False unless real auth is added later.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

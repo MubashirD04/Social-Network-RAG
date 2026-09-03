@@ -30,8 +30,8 @@ async def get_people(id: str):
 @router.get("/{id}/topics")
 async def get_topics(id: str):
     analysis = get_analysis_or_404(id)
-    stats = analysis["stats"]
-    return {"topics": stats.get("total_topics", 0), "details": "Topics currently mixed into stats block."}
+    builder = analysis["builder"]
+    return {"topics": builder.get_topics()}
 
 @router.get("/{id}/communities")
 async def get_communities(id: str):
@@ -40,7 +40,7 @@ async def get_communities(id: str):
     communities = {}
     for node, data in builder.graph.nodes(data=True):
         if data.get("type") == "person":
-            comm_id = data.get("community", 0)
+            comm_id = data.get("community", -1)
             if comm_id not in communities:
                 communities[comm_id] = []
             communities[comm_id].append(node)
@@ -68,13 +68,16 @@ async def get_graph_data(id: str):
 
 @router.get("/{id}/visualisation")
 async def get_visualisation(id: str):
+    # This is a standalone PyVis HTML export for viewing a graph outside the
+    # React SPA (or from a non-browser MCP client). The SPA itself renders
+    # its own graph via react-force-graph-2d and never embeds this output.
     analysis = get_analysis_or_404(id)
     builder = analysis["builder"]
-    
-    # Needs to be generated or served from a tmp path
+
     import tempfile
     import os
-    
+
+
     tmp_path = os.path.join(tempfile.gettempdir(), f"viz_{id}.html")
     builder.visualize(tmp_path)
     

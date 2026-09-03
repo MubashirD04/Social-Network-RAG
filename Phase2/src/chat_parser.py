@@ -1,7 +1,7 @@
 import json
 import re
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Dict, Union
 
@@ -12,6 +12,14 @@ class ChatParser:
     Parses various chat export formats into the standard List[Message] schema.
     Supported formats: WhatsApp (.txt), Telegram (.json), Slack (.zip).
     """
+
+    # Unlike Telegram/Slack, WhatsApp .txt exports carry no reply/thread
+    # metadata at all, so the social graph would otherwise have no way to
+    # infer who's talking to whom. As a fallback, a message with no @mention
+    # is treated as an implicit reply to the immediately preceding message
+    # from a different sender, as long as it follows within this window.
+    IMPLICIT_REPLY_WINDOW = timedelta(minutes=5)
+    _MENTION_PATTERN = re.compile(r'@(\w+)')
 
     @classmethod
     def parse_file(cls, filepath: Union[str, Path]) -> List[Message]:
@@ -85,7 +93,27 @@ class ChatParser:
         if current_msg:
             messages.append(current_msg)
 
+        cls._infer_implicit_replies(messages)
+
         return [Message(**msg) for msg in messages]
+
+    @classmethod
+    def _infer_implicit_replies(cls, messages: List[Dict]) -> None:
+        """
+        Fills in reply_to (in place) for WhatsApp messages using sequential
+        adjacency, since the format has no real reply metadata to parse.
+        """
+        prev: Optional[Dict] = None
+        for msg in messages:
+            if (
+                prev is not None
+                and prev['sender'] != msg['sender']
+                and not cls._MENTION_PATTERN.search(msg['content'])
+            ):
+                gap = msg['timestamp'] - prev['timestamp']
+                if timedelta(0) <= gap <= cls.IMPLICIT_REPLY_WINDOW:
+                    msg['reply_to'] = prev['id']
+            prev = msg
 
     @classmethod
     def parse_telegram(cls, filepath: Path) -> List[Message]:

@@ -3,7 +3,7 @@
   height: 100vh;
   position: relative;
   overflow: hidden;
-  background-color: #1a1525; /* DIAGNOSTIC PURPLE: If you see this, code is fresh */
+  background-color: #1a1525;
 }
 
 /* --- Drop Zone --- */

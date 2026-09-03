@@ -1,4 +1,8 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+// This is the sole interactive graph renderer for the app — the PyVis output
+// served from GET /graph/{id}/visualisation is a separate, static HTML export
+// (e.g. for viewing a graph outside the SPA, or from a non-browser MCP
+// client) and is not meant to be embedded here.
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { UploadCloud, Network, Search, FolderOpen, X } from 'lucide-react';
 import './App.css';
@@ -13,6 +17,14 @@ const COLORS = {
 
 const API_BASE_URL = ''; // Proxied via Vite in dev, same origin in prod
 
+// Node IDs are prefixed by type on the backend (social_graph_builder.py):
+// person -> `p_{sender}`, message -> `m_{message_id}`. Topic and chat nodes
+// use their raw string as-is. Build/parse IDs through these helpers rather
+// than inline template literals so the convention lives in one place.
+const nodeId = {
+  message: (messageId) => `m_${messageId}`,
+};
+
 function App() {
   const [analysisId, setAnalysisId] = useState(null);
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
@@ -22,10 +34,22 @@ function App() {
   const [queryResults, setQueryResults] = useState([]);
   const [queryLoading, setQueryLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
-  const [debugLog, setDebugLog] = useState([]);
+  // Set when a message node is selected, so the whole reply thread it
+  // belongs to (root + every nested reply) can be highlighted instead of
+  // just the one flat edge to its immediate parent.
+  const [highlightThreadRoot, setHighlightThreadRoot] = useState(null);
 
-  const log = (msg) => setDebugLog(prev => [msg, ...prev].slice(0, 10));
-  
+  // Maps message node id -> thread_root, so link color/width can tell
+  // whether a link belongs to the highlighted thread even before
+  // react-force-graph resolves link.source/target into full node objects.
+  const messageThreadById = useMemo(() => {
+    const map = {};
+    graphData.nodes.forEach(n => {
+      if (n.thread_root) map[n.id] = n.thread_root;
+    });
+    return map;
+  }, [graphData]);
+
   const fgRef = useRef();
   const fileInputRef = useRef();
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -126,22 +150,33 @@ function App() {
   };
 
   const handleNodeClick = useCallback(node => {
-    log(`Clicked: ${node.label} (${node.id}) type=${node.type}`);
     if (!fgRef.current || !node) return;
     fgRef.current.centerAt(node.x, node.y, 1000);
     fgRef.current.zoom(3, 1000);
     setSelectedNode(node);
+    setHighlightThreadRoot(node.type === 'message' ? node.thread_root : null);
   }, []);
 
   const handleResultClick = (result) => {
-    const node = graphData.nodes.find(n => n.id === `m_${result.message_id}`);
+    const node = graphData.nodes.find(n => n.id === nodeId.message(result.message_id));
     if (node && fgRef.current) {
-      log(`Zooming to: ${node.id}`);
       fgRef.current.centerAt(node.x, node.y, 1000);
       fgRef.current.zoom(3, 1000);
       setSelectedNode({ ...node, type: 'message', text: result.content, timestamp: result.timestamp });
-    } else {
-      log(`ERR: Node m_${result.message_id} not in graph`);
+      setHighlightThreadRoot(node.thread_root ?? null);
+    }
+  };
+
+  const resetApp = () => {
+    setAnalysisId(null);
+    setGraphData({ nodes: [], links: [] });
+    setSelectedNode(null);
+    setHighlightThreadRoot(null);
+    setQuery('');
+    setQueryResults([]);
+    setDragActive(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -199,25 +234,60 @@ function App() {
               const label = node.label || node.id;
               const fontSize = 12/globalScale;
               ctx.font = `${fontSize}px Sans-Serif`;
-              const textWidth = ctx.measureText(label).width;
-              const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2); // some padding
+
+              // Message nodes shrink with reply depth, so a nested thread
+              // reads visually as narrowing rather than a flat chain of
+              // identically-sized dots.
+              const depth = node.reply_depth || 0;
+              const radius = node.type === 'message' ? Math.max(2.5, 5 - depth * 0.6) : 5;
+
+              const inHighlightedThread = highlightThreadRoot && node.thread_root === highlightThreadRoot;
+              const isDimmed = highlightThreadRoot && !inHighlightedThread;
+
+              ctx.globalAlpha = isDimmed ? 0.15 : 1;
 
               ctx.fillStyle = COLORS[node.type] || '#fff';
-              ctx.beginPath(); 
-              ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI, false); 
+              ctx.beginPath();
+              ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
               ctx.fill();
 
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-              ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2 - 8, bckgDimensions[0], bckgDimensions[1]);
+              if (inHighlightedThread) {
+                ctx.strokeStyle = '#FFD93D';
+                ctx.lineWidth = 1.5 / globalScale;
+                ctx.stroke();
+              }
 
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillStyle = '#000';
-              ctx.fillText(label, node.x, node.y - 8);
+              if (!isDimmed) {
+                const textWidth = ctx.measureText(label).width;
+                const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2); // some padding
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2 - 8, bckgDimensions[0], bckgDimensions[1]);
+
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#000';
+                ctx.fillText(label, node.x, node.y - 8);
+              }
+
+              ctx.globalAlpha = 1;
             }}
             onNodeClick={handleNodeClick}
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={1}
+            linkColor={(link) => {
+              if (!highlightThreadRoot) return 'rgba(255,255,255,0.2)';
+              const sourceRoot = typeof link.source === 'object' ? link.source.thread_root : messageThreadById[link.source];
+              const targetRoot = typeof link.target === 'object' ? link.target.thread_root : messageThreadById[link.target];
+              const inThread = sourceRoot === highlightThreadRoot || targetRoot === highlightThreadRoot;
+              return inThread ? '#FFD93D' : 'rgba(255,255,255,0.04)';
+            }}
+            linkWidth={(link) => {
+              if (!highlightThreadRoot) return 1;
+              const sourceRoot = typeof link.source === 'object' ? link.source.thread_root : messageThreadById[link.source];
+              const targetRoot = typeof link.target === 'object' ? link.target.thread_root : messageThreadById[link.target];
+              return (sourceRoot === highlightThreadRoot || targetRoot === highlightThreadRoot) ? 2 : 0.5;
+            }}
           />
 
           <div className="top-bar glass-panel overlay-panel">
@@ -236,7 +306,7 @@ function App() {
               />
               {queryLoading && <div className="search-spinner"></div>}
             </div>
-            <button className="icon-btn" title="Reset" onClick={() => window.location.reload()}>
+            <button className="icon-btn" title="Reset" onClick={resetApp}>
               <FolderOpen size={20} />
             </button>
           </div>
@@ -245,7 +315,7 @@ function App() {
             <div className="details-sidebar glass-panel overlay-panel">
               <div className="panel-header">
                 <h2>{selectedNode.label || selectedNode.id}</h2>
-                <button className="close-btn" onClick={() => setSelectedNode(null)}><X size={20} /></button>
+                <button className="close-btn" onClick={() => { setSelectedNode(null); setHighlightThreadRoot(null); }}><X size={20} /></button>
               </div>
               <div className="badge-container">
                 {selectedNode.type === 'person' ? (
@@ -275,6 +345,14 @@ function App() {
                       <p style={{marginTop:'10px', color: 'var(--text-muted)', fontSize:'0.8rem'}}>
                         {new Date(selectedNode.timestamp).toLocaleString()}
                       </p>
+                      {typeof selectedNode.reply_depth === 'number' && (
+                        <p style={{marginTop:'10px', color: 'var(--text-muted)', fontSize:'0.8rem'}}>
+                          {selectedNode.reply_depth === 0
+                            ? `Thread root · ${selectedNode.thread_size} message${selectedNode.thread_size === 1 ? '' : 's'} in this thread`
+                            : `Reply depth ${selectedNode.reply_depth} of ${selectedNode.thread_size}-message thread`}
+                          <br />Full thread highlighted on the graph.
+                        </p>
+                      )}
                     </>
                   )}
                   {selectedNode.type === 'topic' && <p>Conversations about <strong>{selectedNode.label}</strong>.</p>}
@@ -308,15 +386,8 @@ function App() {
             <div className="legend-item"><span className="dot person-dot"></span> Person</div>
             <div className="legend-item"><span className="dot topic-dot" style={{borderRadius: '2px', transform: 'rotate(45deg)'}}></span> Topic</div>
             <div className="legend-item"><span className="dot message-dot"></span> Message</div>
-          </div>
-
-          <div style={{position:'fixed', bottom:'20px', left:'20px', background:'rgba(0,0,0,0.8)', padding:'10px', fontSize:'10px', color:'#0f0', borderRadius:'5px', pointerEvents:'none', zIndex: 1000, maxWidth: '300px'}}>
-            <strong>INTERACTION LOG:</strong>
-            {debugLog.map((l, i) => <div key={i}>{l}</div>)}
-            <hr />
-            <strong>LOADED IDS:</strong>
-            <div style={{maxHeight:'100px', overflowY:'auto'}}>
-              {graphData.nodes.map(n => n.id).join(', ')}
+            <div className="legend-item" style={{marginTop: '8px', fontSize: '0.75rem', color: 'var(--text-muted)'}}>
+              Click a message to highlight its full reply thread
             </div>
           </div>
         </>

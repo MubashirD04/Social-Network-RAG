@@ -60,9 +60,9 @@ Social-Network-RAG/
 
 ```bash
 just install   # create venv via uv, install Python + npm deps
-just start     # start API, frontend dev server, and MCP server
+just start     # start API + frontend dev server together in the background
 just test      # run full pytest suite
-just stop      # stop all managed processes
+just stop      # stop processes started by `just start`
 ```
 
 Uses `uv` for fast dependency management and `just` as a process runner. No Docker required, works everywhere Python 3.12 runs.
@@ -88,7 +88,8 @@ FastAPI service wrapping the pipeline. Analyses identified by UUID, results stor
 | GET    | `/graph/{id}/people`        | Influence report — all participants ranked         |
 | GET    | `/graph/{id}/topics`        | Extracted topics for a chat                        |
 | GET    | `/graph/{id}/communities`   | Community groupings and membership                 |
-| GET    | `/graph/{id}/visualisation` | Serve the generated PyVis HTML graph               |
+| GET    | `/graph/{id}/data`          | Raw nodes/edges for the React frontend's graph      |
+| GET    | `/graph/{id}/visualisation` | Serve the generated standalone PyVis HTML export   |
 | POST   | `/graph/{id}/query`         | Semantic search over message content               |
 | DELETE | `/graph/{id}`               | Remove a stored analysis                           |
 
@@ -115,13 +116,13 @@ Thin wrapper around the API exposing callable tools via the Anthropic MCP Python
 
 A browser interface that is intuitive enough to use without instructions and interactive enough to reward exploration. Runs as a **separate service** from the API. It is one consumer of the API, not the primary deliverable.
 
-**Known issues to resolve before Phase 5 ships:**
+**Known issues — resolved:**
 
-- Debug log panel is hardcoded into `App.jsx` — must be removed
-- Node ID prefix convention (`p_`, `m_`) between backend and frontend is implicit — needs to be formalised or removed
-- Two graph renderers coexist (`react-force-graph-2d` in the UI vs PyVis for `/visualisation`) — decide one owner
-- `window.location.reload()` used for reset — replace with clean React state reset
-- Development artefacts in `App.css` (`/* DIAGNOSTIC PURPLE */` comment) — remove
+- ~~Debug log panel hardcoded into `App.jsx`~~ — removed.
+- ~~Node ID prefix convention (`p_`, `m_`) implicit~~ — formalised as a `nodeId` helper (`App.jsx`) instead of inline template literals; documented in `social_graph_builder.py`.
+- ~~Two graph renderers coexist~~ — ownership decided and documented in both places: `react-force-graph-2d` is the only in-app renderer; PyVis's `/graph/{id}/visualisation` is kept as a separate, standalone HTML export (for viewing outside the SPA, e.g. from an MCP client), never embedded in the app.
+- ~~`window.location.reload()` used for reset~~ — replaced with a `resetApp()` function that clears React state.
+- ~~`/* DIAGNOSTIC PURPLE */` comment in `App.css`~~ — removed.
 
 **Target UX once issues are resolved:**
 
@@ -151,6 +152,8 @@ A browser interface that is intuitive enough to use without instructions and int
 just install   # uv venv + uv pip install + npm install
 just api       # Start FastAPI backend
 just frontend  # Start Vite development server
+just start     # Start API + frontend together in the background
+just stop      # Stop processes started by `just start`
 just inspect   # Start MCP Inspector
 just test      # Run all tests
 just clean     # Clean up temporary files

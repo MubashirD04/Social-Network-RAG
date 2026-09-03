@@ -1,12 +1,13 @@
 networkx
 pyvis
 pydantic
-keybert
-sentence-transformers
+yake
+fastembed
 fastapi
 uvicorn
 python-multipart
 pytest
 numpy
-mcp
+scipy
+mcp<2
 httpx

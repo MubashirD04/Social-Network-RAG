@@ -70,9 +70,9 @@ The project now includes a high-performance React dashboard powered by Vite.
    ```
 2. **Backend**:
    ```bash
-   # In a separate terminal
+   # In a separate terminal, from the repo root
    export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2
-   ./venv/bin/python3 Phase2/api/main.py
+   uv run uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
    ```
 
 ### Production Build
@@ -99,11 +99,11 @@ The MCP Inspector provides a local web UI to test tools and resources without an
 1.  **Start the FastAPI Backend**:
     ```bash
     export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2
-    uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    uv run uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
     ```
 2.  **In a second terminal, launch the Inspector**:
     ```bash
-    npx @modelcontextprotocol/inspector python Phase2/mcp_server/server.py
+    npx @modelcontextprotocol/inspector uv run python Phase2/mcp_server/server.py
     ```
 3.  Open the URL provided (usually `http://localhost:3000`) in your browser. You can now trigger tools like `analyse_chat` directly.
 
@@ -160,9 +160,9 @@ After restarting, you should see the `SocialNetworkRAG` tools available in the p
 
 ## Developer Tools
 
-- **Run Tests**: `pytest Phase2/tests`
-- **Manual Demo**: `python Phase2/social_demo.py` (generates a sample graph in `output/`)
-- **Large Scale Test**: `python Phase2/tests/large_social_test.py`
+- **Run Tests**: `just test` (or `PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 uv run pytest Phase2/tests -v`)
+- **Manual Demo**: `just demo` (or `PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 uv run python Phase2/social_demo.py`) — generates a sample graph in `output/`
+- **Large Scale Test**: `PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 uv run python Phase2/tests/large_social_test.py`
 
 ## Visualization Legend
 

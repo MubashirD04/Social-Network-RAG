@@ -28,8 +28,40 @@ def test_parse_whatsapp(temp_workspace):
     
     assert messages[1].sender == "Bob"
     assert "multiline" in messages[1].content
-    
+
     assert messages[2].sender == "Charlie"
+
+
+def test_parse_whatsapp_infers_implicit_replies(temp_workspace):
+    """
+    WhatsApp .txt exports carry no reply/thread metadata, so without a
+    fallback the social graph built from them has no way to infer who's
+    talking to whom (see IMPLICIT_REPLY_WINDOW in chat_parser.py). A message
+    from a different sender than the previous one, arriving soon after and
+    without an @mention, is treated as an implicit reply to it.
+    """
+    file_path = temp_workspace / "whatsapp_chat.txt"
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write("01/01/2023, 10:00 - Alice: Hey everyone!\n")
+        f.write("01/01/2023, 10:01 - Bob: Hi Alice.\n")           # implicit reply to Alice
+        f.write("01/01/2023, 10:01 - Bob: Also, how's it going?\n")  # same sender as previous -> no inferred reply
+        f.write("01/01/2023, 10:02 - Charlie: @Bob good, thanks!\n")  # explicit mention -> no inferred reply_to
+        f.write("01/01/2023, 11:00 - Diana: Morning all!\n")      # outside the window -> no inferred reply
+
+    messages = ChatParser.parse_file(file_path)
+    by_content = {m.content: m for m in messages}
+
+    hi_alice = by_content["Hi Alice."]
+    assert hi_alice.reply_to == messages[0].id
+
+    also_how = by_content["Also, how's it going?"]
+    assert also_how.reply_to is None
+
+    mention_msg = by_content["@Bob good, thanks!"]
+    assert mention_msg.reply_to is None
+
+    morning = by_content["Morning all!"]
+    assert morning.reply_to is None
 
 def test_parse_telegram(temp_workspace):
     file_path = temp_workspace / "telegram_export.json"

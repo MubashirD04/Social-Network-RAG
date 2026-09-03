@@ -25,8 +25,7 @@ Social-Network-RAG/
 │   │   ├── social_models.py          # Pydantic Message schema — shared contract
 │   │   ├── social_graph_builder.py   # Core analysis pipeline
 │   │   ├── chat_parser.py            # File ingestion (WhatsApp, Telegram, Slack)
-│   │   ├── llm_service.py            # Local embeddings + retrieval
-│   │   └── config.py                 # Environment settings (unused currently)
+│   │   └── llm_service.py            # Local embeddings + retrieval
 │   ├── api/
 │   │   ├── __init__.py
 │   │   ├── main.py                   # FastAPI app entry point
@@ -48,11 +47,12 @@ Social-Network-RAG/
 │   │   ├── package.json
 │   │   └── vite.config.js            # Dev proxy: /analyse, /graph → localhost:8000
 │   ├── tests/
-│   │   ├── test_social_pipeline.py   # 47 tests — full pipeline, KeyBERT stubbed
-│   │   ├── test_chat_parser.py       # Parser tests per format
-│   │   └── test_api.py               # Endpoint + retrieval tests
-│   ├── archive/
-│   │   └── graph_builder.py          # Legacy — ignore
+│   │   ├── conftest.py                    # Stubs fastembed/yake for fast, offline tests
+│   │   ├── test_social_graph_builder.py   # Pipeline unit tests (nodes, edges, communities, topics)
+│   │   ├── test_chat_parser.py            # Parser tests per format
+│   │   ├── test_api.py                    # Endpoint + retrieval tests
+│   │   ├── test_mcp_server.py              # MCP tool tests (httpx mocked, no live API needed)
+│   │   └── large_social_test.py           # Manual 75-message integration run, not in CI
 │   ├── requirements.txt
 │   └── social_demo.py
 ├── docs/
@@ -84,7 +84,7 @@ SocialGraphBuilder.process_chat_data()     ← Phase 2 pipeline
     │
     ├── Build person, message, chat nodes
     ├── Parse reply/mention/reaction edges (regex, no LLM)
-    ├── Extract topics via KeyBERT (local)
+    ├── Extract topics via YAKE (local)
     ├── Calculate PageRank + betweenness centrality
     ├── Detect communities (greedy modularity)
     └── Assign badges (INFLUENCER, INFO_BROKER)
@@ -131,7 +131,7 @@ The entire analysis pipeline. No external API dependencies. Complete and tested.
 Key methods:
 
 - `process_chat_data(messages, chat_name)` — async, builds full graph, returns stats dict
-- `_extract_topics_keybert(messages, top_n)` — local keyword extraction via KeyBERT
+- `get_topics()` — extracted topics with the messages that mention each one
 - `_calculate_stats()` — computes PageRank, betweenness, activity counts, badges
 - `_detect_communities(graph, nodes)` — greedy modularity on undirected interaction graph
 - `get_influence_report()` — list of per-person metric dicts sorted by PageRank
@@ -152,9 +152,9 @@ Private parsers:
 
 Local intelligence only. No external API calls, no API key required.
 
-- `generate_embeddings(texts)` → `np.ndarray` — sentence-transformers embeddings
+- `generate_embeddings(texts)` → `np.ndarray` — fastembed (ONNX Runtime, no PyTorch) embeddings
 - `get_top_k_similar(query, embeddings, k)` → ranked `(index, score)` tuples — cosine similarity
-- `extract_topics(messages, top_n)` → `List[str]` — KeyBERT extraction
+- `extract_topics(messages, top_n)` → `List[str]` — YAKE extraction
 
 Exports a module-level singleton: `retrieval_service = LLMService()` used by the API routes.
 
@@ -165,10 +165,6 @@ In-memory dict mapping `UUID → { builder, stats, messages, embeddings, timesta
 ### `mcp_server/server.py`
 
 FastMCP server. Each tool is an async function making an HTTP call to the FastAPI service via `httpx`. No business logic — all intelligence lives in the API and pipeline.
-
-### `archive/graph_builder.py`
-
-**Ignore.** Legacy knowledge graph builder, not connected to anything.
 
 ---
 
@@ -181,7 +177,8 @@ FastMCP server. Each tool is an async function making an HTTP call to the FastAP
 | GET    | `/graph/{id}/people`        | Influence report — participants ranked by PageRank |
 | GET    | `/graph/{id}/topics`        | Extracted topics                                   |
 | GET    | `/graph/{id}/communities`   | Community groupings and membership                 |
-| GET    | `/graph/{id}/visualisation` | Serve the generated PyVis HTML graph               |
+| GET    | `/graph/{id}/data`          | Raw nodes/edges for the React frontend's graph      |
+| GET    | `/graph/{id}/visualisation` | Serve the generated standalone PyVis HTML export   |
 | POST   | `/graph/{id}/query`         | Semantic search — returns ranked message chunks    |
 | DELETE | `/graph/{id}`               | Remove a stored analysis                           |
 
@@ -195,7 +192,7 @@ FastMCP server. Each tool is an async function making an HTTP call to the FastAP
 | `get_influencers`    | `GET /graph/{id}/people`      | Ranked influence report                                  |
 | `get_communities`    | `GET /graph/{id}/communities` | Community groupings and key members                      |
 | `get_topics`         | `GET /graph/{id}/topics`      | Extracted topics                                         |
-| `get_person_network` | `GET /graph/{id}/people`      | Connections and metrics for a specific person            |
+| `get_person_network` | `GET /graph/{id}/people`      | Connections and metrics for a specific person, matched by their display name (the `label` field, not the internal `p_`-prefixed `name`) |
 | `query_chat`         | `POST /graph/{id}/query`      | Semantic search — returns ranked relevant message chunks |
 
 ---
@@ -217,6 +214,8 @@ FastMCP server. Each tool is an async function making an HTTP call to the FastAP
 just install   # uv venv + uv pip install + npm install
 just api       # Start FastAPI backend
 just frontend  # Start Vite development server
+just start     # Start API + frontend together in the background
+just stop      # Stop processes started by `just start`
 just inspect   # Start MCP Inspector
 just test      # Run all tests
 just clean     # Clean up temporary files
@@ -231,7 +230,7 @@ just clean     # Clean up temporary files
 | `chat`    | box     | #FF6B6B | Root node, the chat group itself  |
 | `person`  | dot     | #4ECDC4 | A participant (size = influence)  |
 | `message` | ellipse | #A0D2EB | An individual message             |
-| `topic`   | diamond | #FFD93D | A KeyBERT-extracted keyword/theme |
+| `topic`   | diamond | #FFD93D | A YAKE-extracted keyword/theme |
 
 ### Node ID conventions (critical for frontend integration)
 
@@ -284,13 +283,13 @@ just clean     # Clean up temporary files
 networkx
 pyvis
 pydantic
-keybert
-sentence-transformers
+yake
+fastembed
 numpy
 fastapi
 uvicorn
 python-multipart
-mcp
+mcp<2
 httpx
 pytest
 ```
@@ -307,13 +306,15 @@ python-dotenv # removed — no API keys required anywhere
 
 ## Tests
 
-| File                      | Status   | Coverage                                  |
-| ------------------------- | -------- | ----------------------------------------- |
-| `test_social_pipeline.py` | Complete | 47 tests — full pipeline, KeyBERT stubbed |
-| `test_chat_parser.py`     | Complete | WhatsApp, Telegram, Slack ingestion       |
-| `test_api.py`             | Complete | Endpoint tests and semantic retrieval     |
-| `large_social_test.py`    | Manual   | 75-message integration run, not in CI     |
-| `llm_test.py`             | Legacy   | Tests removed features — delete           |
+| File                           | Status   | Coverage                                                    |
+| ------------------------------ | -------- | ------------------------------------------------------------ |
+| `test_social_graph_builder.py` | Complete | Pipeline unit tests — node/edge wiring, communities, topics |
+| `test_chat_parser.py`          | Complete | WhatsApp, Telegram, Slack ingestion                          |
+| `test_api.py`                  | Complete | Endpoint tests and semantic retrieval                        |
+| `test_mcp_server.py`           | Complete | MCP tool tests, httpx mocked — no live API needed            |
+| `large_social_test.py`         | Manual   | 75-message integration run, not in CI                        |
+
+`conftest.py` stubs `fastembed` and `yake` with deterministic fakes so the suite runs fast and without downloading real models. Real model behaviour is exercised manually via `just demo`.
 
 ```bash
 cd Phase2
@@ -324,16 +325,15 @@ pytest tests/ -v
 
 ## Known Limitations
 
-1. **Topic-to-message matching is exact.** KeyBERT bigrams only connect to messages containing that exact phrase. Single-word topics match more reliably.
-2. **Badge thresholds are fixed constants.** Dynamic percentile-based thresholds would be more robust across different chat sizes.
-3. **Analysis store is in-memory.** Restarting the API loses all stored analyses. Persistent storage (SQLite or Redis) needed before any production deployment.
-4. **No nested reply visualisation.** The graph shows direct reply edges but complex nested threads are hard to follow visually.
-5. **Frontend has unresolved issues (Phase 5):**
-   - Debug log panel hardcoded in `App.jsx` — remove before production
-   - Node ID prefix convention (`p_`, `m_`) is implicit between backend and frontend — must be formalised
-   - Two competing graph renderers: `react-force-graph-2d` in the UI and PyVis for `/visualisation` — decide one owner
-   - `window.location.reload()` used for reset — replace with clean React state reset
-   - `App.css` contains `/* DIAGNOSTIC PURPLE */` development comment — remove
+1. **Analysis store is in-memory.** Restarting the API loses all stored analyses. Persistent storage (SQLite or Redis) needed before any production deployment.
+
+Resolved since the last pass:
+
+- **Topic-to-message matching** now matches per-word (with prefix matching for morphological variants like "design"/"designing") instead of requiring a YAKE bigram to appear as one exact phrase — see `SocialGraphBuilder.process_chat_data`'s topic-connection loop in `src/social_graph_builder.py`.
+- **Badge thresholds** are now computed per-chat as the 75th percentile of that chat's own PageRank/betweenness distribution instead of fixed constants (0.12/0.15) — see `_calculate_stats` in `src/social_graph_builder.py`.
+- **Nested reply visualisation**: every message node now carries `reply_depth`, `thread_root`, and `thread_size` (computed in `_compute_reply_threads`). The frontend shrinks message nodes by depth and, on click, highlights the full reply thread (dimming everything else) instead of just the one flat edge to its parent — see `App.jsx`.
+
+Phase 5's frontend known-issues list (debug panel, implicit node ID prefixes, competing renderers, `window.location.reload()`, the `DIAGNOSTIC PURPLE` comment) has been resolved — see `App.jsx` and `App.css`.
 
 ---
 

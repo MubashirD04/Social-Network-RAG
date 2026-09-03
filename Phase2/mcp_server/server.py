@@ -103,10 +103,12 @@ async def get_person_network(analysis_id: str, person_name: str) -> dict:
              return {"error": "Connection failed", "detail": str(e)}
 
         if response.status_code == 200:
-            data = response.json()
-            people = data.get("people", [])
+            # /graph/{id}/people returns a bare JSON array of people, not
+            # {"people": [...]}. Match on "label" (the human-readable sender
+            # name), not "name" (the internal p_-prefixed graph node id).
+            people = response.json()
             for person in people:
-                if person["name"].lower() == person_name.lower():
+                if person.get("label", "").lower() == person_name.lower():
                     return person
             return {"error": f"Person '{person_name}' not found in network."}
         return {"error": f"API Error: {response.status_code}", "detail": response.text}
