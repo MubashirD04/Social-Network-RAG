@@ -15,6 +15,24 @@ const COLORS = {
   bg: '#0f1115'
 };
 
+// Distinct hues cycled by community id so each cluster reads as its own
+// color both on person nodes and on the edges between members of that
+// cluster. -1 ("no community", e.g. isolated participants) falls back to
+// a neutral gray rather than claiming a palette slot.
+const COMMUNITY_PALETTE = [
+  '#FF6B6B', '#4ECDC4', '#FFD93D', '#A78BFA', '#F97316',
+  '#22D3EE', '#F472B6', '#84CC16', '#60A5FA', '#FB923C',
+  '#34D399', '#E879F9'
+];
+const NO_COMMUNITY_COLOR = '#6B7280';
+
+const communityColor = (communityId) => {
+  if (communityId === undefined || communityId === null || communityId === -1) {
+    return NO_COMMUNITY_COLOR;
+  }
+  return COMMUNITY_PALETTE[communityId % COMMUNITY_PALETTE.length];
+};
+
 const API_BASE_URL = ''; // Proxied via Vite in dev, same origin in prod
 
 // Node IDs are prefixed by type on the backend (social_graph_builder.py):
@@ -34,21 +52,36 @@ function App() {
   const [queryResults, setQueryResults] = useState([]);
   const [queryLoading, setQueryLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
-  // Set when a message node is selected, so the whole reply thread it
-  // belongs to (root + every nested reply) can be highlighted instead of
-  // just the one flat edge to its immediate parent.
-  const [highlightThreadRoot, setHighlightThreadRoot] = useState(null);
 
-  // Maps message node id -> thread_root, so link color/width can tell
-  // whether a link belongs to the highlighted thread even before
+  // Maps node id -> node, for community lookups on links before
   // react-force-graph resolves link.source/target into full node objects.
-  const messageThreadById = useMemo(() => {
+  const nodeById = useMemo(() => {
     const map = {};
-    graphData.nodes.forEach(n => {
-      if (n.thread_root) map[n.id] = n.thread_root;
-    });
+    graphData.nodes.forEach(n => { map[n.id] = n; });
     return map;
   }, [graphData]);
+
+  // Drives click-to-highlight: every link directly touching the selected
+  // node lights up, along with the neighbors on the other end of those
+  // links. For a message that's its parent reply-to edge (before) and any
+  // direct replies to it (after), plus its SENT/PART_OF/topic edges — one
+  // hop out, same as every other node type. Everything else dims.
+  const highlightData = useMemo(() => {
+    if (!selectedNode) return null;
+
+    const nodeIds = new Set([selectedNode.id]);
+    const linkSet = new Set();
+    graphData.links.forEach(l => {
+      const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+      const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+      if (sourceId === selectedNode.id || targetId === selectedNode.id) {
+        linkSet.add(l);
+        nodeIds.add(sourceId);
+        nodeIds.add(targetId);
+      }
+    });
+    return { nodeIds, linkSet };
+  }, [selectedNode, graphData]);
 
   const fgRef = useRef();
   const fileInputRef = useRef();
@@ -59,6 +92,16 @@ function App() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Push nodes further apart than the library defaults so dense graphs
+  // don't collapse into an unreadable clump: stronger mutual repulsion
+  // plus longer rest length on links, then reheat so it takes effect.
+  useEffect(() => {
+    if (!fgRef.current || graphData.nodes.length === 0) return;
+    fgRef.current.d3Force('charge').strength(-220).distanceMax(800);
+    fgRef.current.d3Force('link').distance(90);
+    fgRef.current.d3ReheatSimulation();
+  }, [graphData]);
 
   const handleFileUpload = async (file) => {
     if (!file) return;
@@ -154,7 +197,6 @@ function App() {
     fgRef.current.centerAt(node.x, node.y, 1000);
     fgRef.current.zoom(3, 1000);
     setSelectedNode(node);
-    setHighlightThreadRoot(node.type === 'message' ? node.thread_root : null);
   }, []);
 
   const handleResultClick = (result) => {
@@ -163,7 +205,6 @@ function App() {
       fgRef.current.centerAt(node.x, node.y, 1000);
       fgRef.current.zoom(3, 1000);
       setSelectedNode({ ...node, type: 'message', text: result.content, timestamp: result.timestamp });
-      setHighlightThreadRoot(node.thread_root ?? null);
     }
   };
 
@@ -171,7 +212,6 @@ function App() {
     setAnalysisId(null);
     setGraphData({ nodes: [], links: [] });
     setSelectedNode(null);
-    setHighlightThreadRoot(null);
     setQuery('');
     setQueryResults([]);
     setDragActive(false);
@@ -229,7 +269,7 @@ function App() {
             backgroundColor={COLORS.bg}
             nodeId="id"
             nodeRelSize={6}
-            nodeAutoColorBy="type"
+            d3VelocityDecay={0.25}
             nodeCanvasObject={(node, ctx, globalScale) => {
               const label = node.label || node.id;
               const fontSize = 12/globalScale;
@@ -241,19 +281,26 @@ function App() {
               const depth = node.reply_depth || 0;
               const radius = node.type === 'message' ? Math.max(2.5, 5 - depth * 0.6) : 5;
 
-              const inHighlightedThread = highlightThreadRoot && node.thread_root === highlightThreadRoot;
-              const isDimmed = highlightThreadRoot && !inHighlightedThread;
+              const isHighlighted = highlightData && highlightData.nodeIds.has(node.id);
+              const isDimmed = highlightData && !isHighlighted;
 
               ctx.globalAlpha = isDimmed ? 0.15 : 1;
 
-              ctx.fillStyle = COLORS[node.type] || '#fff';
+              // Person nodes are colored by their detected community so
+              // clusters are visually distinct; every other node type keeps
+              // its fixed type color.
+              ctx.fillStyle = node.type === 'person' ? communityColor(node.community) : (COLORS[node.type] || '#fff');
               ctx.beginPath();
               ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
               ctx.fill();
 
-              if (inHighlightedThread) {
+              if (isHighlighted && node.id !== selectedNode?.id) {
                 ctx.strokeStyle = '#FFD93D';
                 ctx.lineWidth = 1.5 / globalScale;
+                ctx.stroke();
+              } else if (node.id === selectedNode?.id) {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2 / globalScale;
                 ctx.stroke();
               }
 
@@ -273,20 +320,30 @@ function App() {
               ctx.globalAlpha = 1;
             }}
             onNodeClick={handleNodeClick}
+            onBackgroundClick={() => setSelectedNode(null)}
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={1}
             linkColor={(link) => {
-              if (!highlightThreadRoot) return 'rgba(255,255,255,0.2)';
-              const sourceRoot = typeof link.source === 'object' ? link.source.thread_root : messageThreadById[link.source];
-              const targetRoot = typeof link.target === 'object' ? link.target.thread_root : messageThreadById[link.target];
-              const inThread = sourceRoot === highlightThreadRoot || targetRoot === highlightThreadRoot;
-              return inThread ? '#FFD93D' : 'rgba(255,255,255,0.04)';
+              if (highlightData) {
+                return highlightData.linkSet.has(link) ? '#FFD93D' : 'rgba(255,255,255,0.03)';
+              }
+              // Idle state: tint edges between two members of the same
+              // community so clusters read as connected paths, not just
+              // colored dots.
+              const sourceNode = typeof link.source === 'object' ? link.source : nodeById[link.source];
+              const targetNode = typeof link.target === 'object' ? link.target : nodeById[link.target];
+              if (
+                sourceNode?.type === 'person' && targetNode?.type === 'person' &&
+                sourceNode.community === targetNode.community && sourceNode.community !== -1 &&
+                sourceNode.community !== undefined && sourceNode.community !== null
+              ) {
+                return communityColor(sourceNode.community);
+              }
+              return 'rgba(255,255,255,0.2)';
             }}
             linkWidth={(link) => {
-              if (!highlightThreadRoot) return 1;
-              const sourceRoot = typeof link.source === 'object' ? link.source.thread_root : messageThreadById[link.source];
-              const targetRoot = typeof link.target === 'object' ? link.target.thread_root : messageThreadById[link.target];
-              return (sourceRoot === highlightThreadRoot || targetRoot === highlightThreadRoot) ? 2 : 0.5;
+              if (!highlightData) return 1;
+              return highlightData.linkSet.has(link) ? 2 : 0.5;
             }}
           />
 
@@ -315,11 +372,14 @@ function App() {
             <div className="details-sidebar glass-panel overlay-panel">
               <div className="panel-header">
                 <h2>{selectedNode.label || selectedNode.id}</h2>
-                <button className="close-btn" onClick={() => { setSelectedNode(null); setHighlightThreadRoot(null); }}><X size={20} /></button>
+                <button className="close-btn" onClick={() => setSelectedNode(null)}><X size={20} /></button>
               </div>
               <div className="badge-container">
                 {selectedNode.type === 'person' ? (
                   <>
+                    <span className="badge" style={{background: communityColor(selectedNode.community), color: '#000'}}>
+                      {selectedNode.community === -1 || selectedNode.community == null ? 'NO COMMUNITY' : `COMMUNITY ${selectedNode.community}`}
+                    </span>
                     {selectedNode.is_influencer && <span className="badge influencer">INFLUENCER</span>}
                     {selectedNode.is_info_broker && <span className="badge broker">BROKER</span>}
                   </>
@@ -334,7 +394,7 @@ function App() {
                 <div className="metrics-grid">
                   <div className="metric-box"><div className="metric-value">{selectedNode.message_count || 0}</div><div className="metric-label">Messages</div></div>
                   <div className="metric-box"><div className="metric-value">{selectedNode.replies_received || 0}</div><div className="metric-label">Replies</div></div>
-                  <div className="metric-box"><div className="metric-value">{selectedNode.pagerank?.toFixed(3) || 0}</div><div className="metric-label">Influence</div></div>
+                  <div className="metric-box" title={selectedNode.pagerank ?? 0}><div className="metric-value">{selectedNode.pagerank?.toFixed(5) || 0}</div><div className="metric-label">Influence</div></div>
                   <div className="metric-box"><div className="metric-value">Group {selectedNode.community ?? '?'}</div><div className="metric-label">Community</div></div>
                 </div>
               ) : (
@@ -350,7 +410,7 @@ function App() {
                           {selectedNode.reply_depth === 0
                             ? `Thread root · ${selectedNode.thread_size} message${selectedNode.thread_size === 1 ? '' : 's'} in this thread`
                             : `Reply depth ${selectedNode.reply_depth} of ${selectedNode.thread_size}-message thread`}
-                          <br />Full thread highlighted on the graph.
+                          <br />Its reply-to and reply-from links are highlighted on the graph.
                         </p>
                       )}
                     </>
@@ -383,11 +443,19 @@ function App() {
 
           <div className="legend-panel glass-panel overlay-panel">
             <h4>Legend</h4>
-            <div className="legend-item"><span className="dot person-dot"></span> Person</div>
+            <div className="legend-item"><span className="dot" style={{background: `linear-gradient(135deg, ${COMMUNITY_PALETTE[0]}, ${COMMUNITY_PALETTE[3]}, ${COMMUNITY_PALETTE[6]})`}}></span> Person (colored by community)</div>
             <div className="legend-item"><span className="dot topic-dot" style={{borderRadius: '2px', transform: 'rotate(45deg)'}}></span> Topic</div>
             <div className="legend-item"><span className="dot message-dot"></span> Message</div>
+            <div className="legend-item" style={{marginTop: '8px'}}>
+              <span className="badge influencer" style={{fontSize: '0.65rem'}}>INFLUENCER</span>
+              <span style={{marginLeft: '6px', fontSize: '0.75rem', color: 'var(--text-muted)'}}>High PageRank — a central, high-influence person</span>
+            </div>
+            <div className="legend-item">
+              <span className="badge broker" style={{fontSize: '0.65rem'}}>BROKER</span>
+              <span style={{marginLeft: '6px', fontSize: '0.75rem', color: 'var(--text-muted)'}}>High betweenness — bridges otherwise separate groups</span>
+            </div>
             <div className="legend-item" style={{marginTop: '8px', fontSize: '0.75rem', color: 'var(--text-muted)'}}>
-              Click a message to highlight its full reply thread
+              Click a node to highlight everything connected to it
             </div>
           </div>
         </>

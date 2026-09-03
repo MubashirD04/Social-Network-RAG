@@ -28,21 +28,20 @@ inspect:
 # Start the API and frontend together in the background
 start:
     export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 && \
-    rm -f .dev-pids && \
-    (uv run uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/social-rag-api.log 2>&1 & echo $! >> .dev-pids) && \
-    (cd Phase2/frontend && npm run dev > /tmp/social-rag-frontend.log 2>&1 & echo $! >> ../../.dev-pids) && \
+    (uv run uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/social-rag-api.log 2>&1 &) && \
+    (cd Phase2/frontend && npm run dev > /tmp/social-rag-frontend.log 2>&1 &) && \
     echo "API on :8000 (log: /tmp/social-rag-api.log), frontend on Vite's default port (log: /tmp/social-rag-frontend.log)." && \
     echo "Run 'just stop' to stop both."
 
-# Stop processes started by `just start`
+# Stop processes started by `just start` (any leftover session, not just the last one)
 stop:
-    if [ -f .dev-pids ]; then \
-        while read -r pid; do kill "$pid" 2>/dev/null || true; done < .dev-pids; \
-        rm -f .dev-pids; \
-        echo "Stopped."; \
-    else \
-        echo "No .dev-pids file found — nothing to stop."; \
-    fi
+    for pid in $(pgrep -f "Phase2/frontend/node_modules/.bin/vite" 2>/dev/null); do \
+        ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' '); \
+        kill "$pid" "$ppid" 2>/dev/null || true; \
+    done
+    pkill -f "uvicorn api.main:app --host 0.0.0.0 --port 8000" 2>/dev/null || true
+    rm -f .dev-pids
+    echo "Stopped."
 
 # Run all tests
 test:

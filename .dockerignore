@@ -1,0 +1,36 @@
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+Phase2/.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+Phase2/frontend/node_modules/
+Phase2/frontend/dist/
+
+# Tests / dev-only tooling (not part of the deployed web service)
+Phase2/tests/
+Phase2/mcp_server/
+Phase1/
+
+# Local run artifacts
+output/
+*.log
+.dev-pids
+.DS_Store
+
+# Repo-root scratch files not needed in the image
+docs/
+README.md
+Justfile
+WhatsApp Chat with AI Project Team.txt
+whatsapp_dummy_export.zip

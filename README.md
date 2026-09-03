@@ -10,7 +10,7 @@ This project identifies key influencers, information brokers, and community clus
 
 The system operates in a structured pipeline:
 
-1.  **Ingestion**: Raw exports from WhatsApp (.txt), Telegram (.json), or Slack (.zip) are parsed and normalized into a standard message schema.
+1.  **Ingestion**: Raw exports from WhatsApp (.txt), Telegram (.json), or Slack (.zip) are parsed and normalized into a standard message schema. See [docs/data-export-guide.md](docs/data-export-guide.md) for step-by-step instructions on exporting each one.
 2.  **Graph Construction**: Builds a directed graph of social interactions (Replies, Mentions, Reactions).
 3.  **Local Analysis**:
     - **KeyBERT**: Extracts main conversation topics locally.
@@ -83,6 +83,17 @@ The backend is configured to serve the built frontend from `Phase2/frontend/dist
 cd Phase2/frontend
 npm run build
 ```
+
+## Deployment
+
+The root `Dockerfile` builds and serves the whole app as a single container: a Node stage builds the React frontend, and a Python stage runs the FastAPI backend, which serves that build directly (`Phase2/frontend/dist`) alongside the API — one image, one port, nothing else to host separately. The embedding model is baked into the image at build time, so the container needs no network access at startup.
+
+```bash
+docker build -t social-network-rag .
+docker run -p 8000:8000 social-network-rag
+```
+
+Hosted on **Hugging Face Spaces** (Docker SDK, 16GB RAM / 2 vCPU). Because `api/store.py`'s analysis store lives in process memory with no shared backing store, the service must run as a single instance — see [docs/context.md](docs/context.md#deployment) for the full rationale and the memory-profiling notes behind the current embedding-batch-size choice in `src/llm_service.py`.
 
 ## Testing on Linux
 

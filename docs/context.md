@@ -325,7 +325,7 @@ pytest tests/ -v
 
 ## Known Limitations
 
-1. **Analysis store is in-memory.** Restarting the API loses all stored analyses. Persistent storage (SQLite or Redis) needed before any production deployment.
+1. **Analysis store is in-memory** (`api/store.py`'s `AnalysisStore`, a process-local singleton with a 1-hour TTL). Restarting the API loses all stored analyses, and the deployed service must run as a **single instance** — multiple replicas would each hold a different, incomplete set of analyses, so requests to a stored `analysis_id` would 404 unpredictably depending which instance served them. No horizontal autoscaling until this moves to shared storage (SQLite or Redis).
 
 Resolved since the last pass:
 
@@ -340,3 +340,17 @@ Phase 5's frontend known-issues list (debug panel, implicit node ID prefixes, co
 ## Environment Variables
 
 No environment variables or API keys are required at any phase. The entire stack runs locally.
+
+---
+
+## Deployment
+
+The app ships as a single Docker image (root `Dockerfile`, multi-stage): a Node stage builds the Vite frontend, and a `python:3.12-slim` runtime stage runs the FastAPI backend, which mounts the built `frontend/dist` as static files (`api/main.py`) — one process, one port, no separate frontend host or CORS config needed.
+
+The `sentence-transformers/all-MiniLM-L6-v2` ONNX model is baked into the image at build time (`fastembed`'s default cache path, `/tmp/fastembed_cache`, resolved identically at build and run time since `llm_service.py` never overrides `cache_dir`), so the container needs no network access at runtime — cold starts don't re-download the model. `libgomp1` is installed explicitly since `onnxruntime` needs it and `python:slim` doesn't ship it.
+
+**Host**: Hugging Face Spaces, Docker SDK, 16GB RAM / 2 vCPU hardware tier.
+
+**Memory profiling finding** (see git history around `src/llm_service.py` for the fix): embedding an entire chat's messages in one `fastembed.embed()` call caused peak RSS to scale with message count and never release — independent of thread count or the ONNX Runtime CPU memory arena setting (both were profiled and ruled out as the cause). A 3,000-message chat could peak over 2GB on embeddings alone, dwarfing the graph-building cost. Fixed by chunking `generate_embeddings()` into batches of 32 with `gc.collect()` between chunks — cut peak RSS by roughly 70% (3,000-message chat: ~2.1GB → ~560MB, isolated embedding-only measurement). At the 16GB/2vCPU tier this is ample headroom either way, but the fix is what makes the app viable on much smaller hosts too, if ever moved off Spaces.
+
+**Still true regardless of host RAM**: the single-instance constraint from the in-memory `AnalysisStore` (see Known Limitations) — don't enable autoscaling/multiple replicas without moving analysis storage out of process memory first.

@@ -1,6 +1,14 @@
+import gc
 from typing import List
 from fastembed import TextEmbedding
 import numpy as np
+
+# fastembed/onnxruntime's peak memory grows with the size of a single
+# embed() call and is never released afterward, regardless of thread count
+# or the CPU memory arena setting (both were profiled and ruled out).
+# Chunking bounds the working set instead of letting it scale with the
+# number of texts embedded.
+_EMBED_CHUNK_SIZE = 32
 
 class LLMService:
     """
@@ -22,8 +30,13 @@ class LLMService:
         if not texts:
             return np.array([])
 
-        embeddings = list(self.embedder.embed(texts))
-        return np.array(embeddings)
+        chunks = []
+        for i in range(0, len(texts), _EMBED_CHUNK_SIZE):
+            batch = texts[i:i + _EMBED_CHUNK_SIZE]
+            chunks.append(np.array(list(self.embedder.embed(batch))))
+            gc.collect()
+
+        return np.vstack(chunks)
 
     def get_embeddings_dimension(self) -> int:
         return self._dimension
