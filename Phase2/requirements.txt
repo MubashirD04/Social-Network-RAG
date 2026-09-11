@@ -11,3 +11,5 @@ numpy
 scipy
 mcp<2
 httpx
+scikit-learn
+joblib

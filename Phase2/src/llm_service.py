@@ -1,5 +1,5 @@
 import gc
-from typing import List
+from typing import List, Optional, Set
 from fastembed import TextEmbedding
 import numpy as np
 
@@ -73,9 +73,24 @@ class LLMService:
 
         return [(int(idx), float(similarities[idx])) for idx in top_indices if similarities[idx] > 0]
 
-    async def extract_topics(self, messages: List[str], top_n: int = 5) -> List[str]:
+    async def extract_topics(self, messages: List[str], top_n: int = 5, exclude_terms: Optional[Set[str]] = None) -> List[str]:
         """
         Extract main topics from a list of messages using YAKE.
+
+        `exclude_terms` filters out candidate keywords that exactly match one
+        of these terms (case-insensitive) — e.g. chat participant names,
+        which otherwise surface as "topics" simply for being frequent,
+        capitalized tokens rather than anything actually discussed.
+
+        Also dedupes candidates whose words are a strict subset of another
+        candidate's words (e.g. "page" alongside "pricing page" and "page
+        redesign") — YAKE scores unigrams that are pieces of a real n-gram
+        topic well since they inherit its frequency, but keeping both just
+        burns a slot on a less informative repeat of a topic already listed.
+        When a more specific phrase shows up after its subset was already
+        accepted, it replaces that entry rather than being dropped alongside
+        it, so the more informative version wins regardless of which one
+        YAKE happened to rank higher.
         """
         try:
             import yake
@@ -85,9 +100,45 @@ class LLMService:
             if not text.strip():
                 return []
 
-            kw_extractor = yake.KeywordExtractor(lan="en", n=2, top=top_n)
+            exclude = {t.lower() for t in (exclude_terms or [])}
+            # Over-fetch candidates so filtering out excluded terms and
+            # subset duplicates still leaves top_n real topics.
+            kw_extractor = yake.KeywordExtractor(lan="en", n=2, top=top_n * 5)
             keywords = kw_extractor.extract_keywords(text)
-            return [kw[0] for kw in keywords[:top_n]]
+
+            # Scans every over-fetched candidate (not just the first top_n)
+            # so a more specific phrase later in the ranking still gets the
+            # chance to replace a subset already accepted earlier — only the
+            # final slice below enforces top_n.
+            accepted: List[str] = []
+            accepted_tokens: List[frozenset] = []
+            for kw, _score in keywords:
+                if kw.lower() in exclude:
+                    continue
+
+                tokens = frozenset(kw.lower().split())
+
+                # An already-accepted topic that this candidate's words fully
+                # cover is strictly less specific — drop it in favor of this
+                # candidate instead of keeping both.
+                subsumed = [i for i, t in enumerate(accepted_tokens) if t < tokens]
+                if subsumed:
+                    for i in reversed(subsumed):
+                        del accepted[i]
+                        del accepted_tokens[i]
+                    accepted.append(kw)
+                    accepted_tokens.append(tokens)
+                    continue
+
+                # This candidate's words are already fully covered by (or
+                # identical to) something accepted — redundant, skip it.
+                if any(tokens <= t for t in accepted_tokens):
+                    continue
+
+                accepted.append(kw)
+                accepted_tokens.append(tokens)
+
+            return accepted[:top_n]
         except Exception as e:
             print(f"Topic extraction error: {e}")
             return []

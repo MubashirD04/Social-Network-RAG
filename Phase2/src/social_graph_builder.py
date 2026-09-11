@@ -5,14 +5,50 @@ from src.social_models import Message
 from src.llm_service import LLMService
 from typing import List, Dict, Any
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 from networkx.algorithms import community
 
 class SocialGraphBuilder:
+    DEFAULT_TOPIC_COUNT = 5
+
+    # Tuning for _infer_lexical_continuity: how far back (in messages and in
+    # time) an unthreaded message is allowed to look for something it
+    # plausibly continues. Slack channel chatter is bursty but slower-paced
+    # than a WhatsApp thread, hence the wider window than the WhatsApp
+    # parser's own 5-minute implicit-reply heuristic.
+    CONTINUITY_LOOKBACK_MESSAGES = 6
+    CONTINUITY_LOOKBACK_WINDOW = timedelta(minutes=15)
+
+    # Common words long enough to clear the 4-char "distinctive" bar but too
+    # generic to mean two messages are actually about the same thing — left
+    # deliberately small (a handful of frequent connectives/fillers) rather
+    # than a full stopword corpus, since false negatives here just cost a
+    # missed connection while false positives create a wrong one.
+    _CONTINUITY_STOPWORDS = frozenset({
+        "this", "that", "these", "those", "have", "haven", "having", "been",
+        "with", "from", "they", "them", "their", "were", "will", "would",
+        "wouldn", "could", "couldn", "should", "shouldn", "also", "just",
+        "really", "think", "about", "after", "before", "today", "tomorrow",
+        "yesterday", "week", "weeks", "team", "work", "works", "working",
+        "time", "times", "great", "nice", "good", "much", "many", "need",
+        "needs", "make", "made", "going", "doing", "done", "lets", "thanks",
+        "thank", "everyone", "people", "things", "thing", "still", "already",
+        "again", "around", "because", "doesn", "didn", "isn", "aren", "wasn",
+        "cannot", "yeah", "okay", "sure", "sounds", "sound", "looks",
+        "looking", "look", "actually", "probably", "maybe", "kind", "sort",
+        "here", "there", "than", "then", "over", "into", "onto", "some",
+        "when", "what", "which", "your", "youre", "next", "more", "most",
+        "well", "very", "even", "back", "know", "want", "wants", "wanted",
+        "come", "coming", "give", "take", "monday", "tuesday", "wednesday",
+        "thursday", "friday", "saturday", "sunday",
+    })
+
     def __init__(self):
         self.graph = nx.DiGraph() # Directed graph for detailed interactions
         self.llm = LLMService()
+        self.messages: List[Message] = []
+        self.chat_name: str = ""
 
     async def process_chat_data(self, messages: List[Message], chat_name: str):
         print(f"\n{'='*80}")
@@ -32,6 +68,15 @@ class SocialGraphBuilder:
         # 2. Add Person and Message Nodes
         people = set()
         person_to_last_msg = {}
+        # `@mention` text almost never spells out a sender's full display
+        # name (a Slack real_name like "Alice Nguyen" gets mentioned as
+        # "@Alice") — `\w+` mention matches stop at the first space anyway.
+        # Without resolving through this lookup, every such mention forged a
+        # second, disconnected person node ("p_Alice" alongside the real
+        # "p_Alice Nguyen"), fragmenting that person's stats across two
+        # nodes. Keyed by first-name lower-case; ambiguous when two senders
+        # share a first name, same as the mention text itself is ambiguous.
+        sender_by_first_token: Dict[str, str] = {}
         print("\nBuilding social network...")
 
         for msg in messages:
@@ -41,6 +86,7 @@ class SocialGraphBuilder:
             # Person Node
             if msg.sender not in people:
                 people.add(msg.sender)
+                sender_by_first_token[msg.sender.split()[0].lower()] = msg.sender
                 self.graph.add_node(
                     p_id,
                     type="person",
@@ -59,6 +105,7 @@ class SocialGraphBuilder:
                 label=msg_label,
                 title=f"{msg.sender}: {msg.content}\n{msg.timestamp}",
                 text=msg.content,
+                sender=msg.sender,
                 timestamp=msg.timestamp.isoformat(),
                 color="#A0D2EB",
                 size=10,
@@ -78,7 +125,8 @@ class SocialGraphBuilder:
             if not msg.reply_to and msg.content.startswith('@'):
                 first_mention_match = re.search(r'^@(\w+)', msg.content)
                 if first_mention_match:
-                    mentioned_name = first_mention_match.group(1)
+                    raw_mention = first_mention_match.group(1)
+                    mentioned_name = sender_by_first_token.get(raw_mention.lower(), raw_mention)
                     if mentioned_name in person_to_last_msg:
                         self.graph.add_edge(
                             m_id, person_to_last_msg[mentioned_name],
@@ -89,7 +137,8 @@ class SocialGraphBuilder:
                         )
 
             # MENTION PARSING
-            for mentioned_person in mentions:
+            for raw_mention in mentions:
+                mentioned_person = sender_by_first_token.get(raw_mention.lower(), raw_mention)
                 mp_id = f"p_{mentioned_person}"
                 # Add node if not exists (though usually they are senders, sometimes they might not be)
                 if mentioned_person not in people:
@@ -180,14 +229,54 @@ class SocialGraphBuilder:
 
         print(f"   Added {len(people)} participants and {len(messages)} messages")
 
-        # 2b. Map nested reply threads so the frontend can render depth
+        # 2b. Most real chat is never formally threaded — people just reply
+        # in the channel. Without this, a message only connects to another
+        # message via an explicit reply/mention, so an entire unthreaded
+        # back-and-forth (e.g. "is the coffee machine broken again?" / "yeah,
+        # facilities is on it") renders as disconnected dots even though any
+        # human reading it immediately sees it's one conversation.
+        self._infer_lexical_continuity(messages)
+
+        # 2c. Map nested reply threads so the frontend can render depth
         # instead of just flat reply edges.
         self._compute_reply_threads()
 
+        # Stashed so regenerate_topics() can re-run extraction at a
+        # different top_n later without needing the original messages
+        # passed back in (the frontend lets viewers pick a topic count of
+        # 5-10 after the graph is already built).
+        self.messages = messages
+        self.chat_name = chat_name
+
         # 3. Topic Extraction (Async)
+        await self._apply_topics(messages, chat_name, top_n=self.DEFAULT_TOPIC_COUNT)
+
+        # 4. Calculate Social Stats & Communities
+        return self._calculate_stats()
+
+    async def _apply_topics(self, messages: List[Message], chat_name: str, top_n: int):
+        """
+        (Re)runs topic extraction and rewires the topic layer of the graph:
+        drops any existing topic nodes (and, since networkx removes incident
+        edges with them, their DISCUSSED/MENTIONS_TOPIC edges too), then adds
+        fresh ones for the new topic set. Person/message nodes and all social
+        stats are untouched, so this is cheap enough to call every time a
+        viewer changes the topic count slider.
+        """
         print("\nExtracting topics...")
-        msg_texts = [f"{m.sender}: {m.content}" for m in messages]
-        topics = await self.llm.extract_topics(msg_texts)
+        for node, data in list(self.graph.nodes(data=True)):
+            if data.get('type') == 'topic':
+                self.graph.remove_node(node)
+
+        # Extract from message content alone — including "sender: " prefixes
+        # here made participant names the most repeated, highest-signal
+        # n-grams in the corpus, so YAKE surfaced people's names as "topics"
+        # instead of what was actually discussed. Participant names are also
+        # excluded explicitly in case someone's name appears in-line in the
+        # text itself (e.g. "hey John, ...").
+        msg_texts = [m.content for m in messages]
+        participant_names = {m.sender for m in messages}
+        topics = await self.llm.extract_topics(msg_texts, top_n=top_n, exclude_terms=participant_names)
 
         for topic in topics:
             self.graph.add_node(
@@ -216,8 +305,112 @@ class SocialGraphBuilder:
 
         print(f"   Identified topics: {topics}")
 
-        # 4. Calculate Social Stats & Communities
-        return self._calculate_stats()
+    async def regenerate_topics(self, top_n: int):
+        """Re-extracts topics at a new top_n against the same messages this
+        chat was originally built from. Used by the topic-count control in
+        the frontend so changing it doesn't require re-uploading the file."""
+        await self._apply_topics(self.messages, self.chat_name, top_n=top_n)
+        return self.get_topics()
+
+    def _infer_lexical_continuity(self, messages: List[Message]):
+        """
+        Connects a message that has no explicit or mention-inferred reply to
+        the nearest still-recent message in the same channel that it shares
+        a distinctive word with — e.g. two messages that both say "coffee
+        machine" a few turns apart, with nothing to formally thread them
+        together. Reuses the REPLIED_TO relationship (tagged `inferred`,
+        colored differently) so thread-depth rendering picks these up for
+        free, rather than inventing a parallel edge type the frontend would
+        need to special-case.
+
+        Scoped per-channel and to a short lookback window so it can only
+        ever link messages a person skimming the export would plausibly
+        read as the same conversation — never two unrelated messages that
+        happen to land close together across different channels or days.
+
+        Never feeds influence/broker/community scores: every edge this
+        creates is tagged 'inferred' (message-level) or given weight=0 with
+        the increment recorded in 'inferred_weight' instead (person-level),
+        and _calculate_stats only reads 'weight' for its metrics.
+        """
+        # Reused as a stoplist so two messages don't get linked just for
+        # both mentioning the same participant by name.
+        participant_tokens = set()
+        for m in messages:
+            participant_tokens.update(m.sender.lower().split())
+
+        def tokenize(text: str) -> set:
+            words = re.findall(r"[a-zA-Z]{4,}", text.lower())
+            return {
+                w for w in words
+                if w not in self._CONTINUITY_STOPWORDS and w not in participant_tokens
+            }
+
+        by_channel: Dict[Any, List[Message]] = {}
+        for m in messages:
+            by_channel.setdefault(m.channel, []).append(m)
+
+        for channel_messages in by_channel.values():
+            for i, msg in enumerate(channel_messages):
+                m_id = f"m_{msg.id}"
+
+                already_connected = any(
+                    d.get('relationship') == 'REPLIED_TO'
+                    for _, _, d in self.graph.out_edges(m_id, data=True)
+                )
+                if already_connected:
+                    continue
+
+                msg_tokens = tokenize(msg.content)
+                if not msg_tokens:
+                    continue
+
+                window_start = max(0, i - self.CONTINUITY_LOOKBACK_MESSAGES)
+                for prior in reversed(channel_messages[window_start:i]):
+                    if msg.timestamp - prior.timestamp > self.CONTINUITY_LOOKBACK_WINDOW:
+                        break
+                    if prior.sender == msg.sender:
+                        continue
+
+                    shared = msg_tokens & tokenize(prior.content)
+                    if not shared:
+                        continue
+
+                    prior_id = f"m_{prior.id}"
+                    if not self.graph.has_node(prior_id):
+                        continue
+
+                    self.graph.add_edge(
+                        m_id, prior_id,
+                        relationship="REPLIED_TO",
+                        inferred=True,
+                        color="rgba(160, 180, 200, 0.5)",  # muted blue-gray, distinct from the solid yellow of a confirmed reply
+                        width=1,
+                        dashes=True,
+                        title=f"Inferred connection (shared: {', '.join(sorted(shared))})"
+                    )
+
+                    # Tracked separately from 'weight' (and never marked
+                    # 'inferred' on top of a real edge): _calculate_stats
+                    # only sums 'weight' into the interaction graph that
+                    # feeds PageRank/betweenness/community detection, so a
+                    # guessed connection can never inflate or dilute another
+                    # person's influence score. It still renders on the
+                    # frontend (dashed, toggleable) via the 'inferred' flag.
+                    if self.graph.has_edge(f"p_{msg.sender}", f"p_{prior.sender}"):
+                        edge_data = self.graph[f"p_{msg.sender}"][f"p_{prior.sender}"]
+                        edge_data['inferred_weight'] = edge_data.get('inferred_weight', 0) + 1
+                    else:
+                        self.graph.add_edge(
+                            f"p_{msg.sender}", f"p_{prior.sender}",
+                            relationship="INTERACTS_WITH",
+                            weight=0,
+                            inferred_weight=1,
+                            inferred=True,
+                            color="rgba(255, 255, 255, 0.2)",
+                            hidden=True
+                        )
+                    break
 
     def _compute_reply_threads(self):
         """
@@ -274,10 +467,15 @@ class SocialGraphBuilder:
     def _calculate_stats(self):
         print("\nCalculating social metrics...")
 
-        # Create a simplified person-to-person interaction graph for metrics
+        # Create a simplified person-to-person interaction graph for metrics.
+        # Only 'weight' (real replies/@mentions) counts here — an edge that
+        # exists purely from _infer_lexical_continuity's guesswork carries
+        # weight=0 (its contribution lives in 'inferred_weight' instead), so
+        # it's excluded from PageRank/betweenness/community detection
+        # entirely rather than watering down scores built on real activity.
         interaction_graph = nx.DiGraph()
         for u, v, data in self.graph.edges(data=True):
-            if data.get('relationship') == 'INTERACTS_WITH':
+            if data.get('relationship') == 'INTERACTS_WITH' and data.get('weight', 0) > 0:
                 if interaction_graph.has_edge(u, v):
                     interaction_graph[u][v]['weight'] += data['weight']
                 else:
@@ -310,9 +508,11 @@ class SocialGraphBuilder:
                 msg_to_sender[m_id] = p
             activity[p] = len(sent_msgs)
 
-        # Count replies received
+        # Count replies received — confirmed replies only (explicit reply_to
+        # or a leading @mention), same reasoning as the interaction graph
+        # above: a lexically-guessed connection shouldn't move this score.
         for u, v, d in self.graph.edges(data=True):
-            if d.get('relationship') == 'REPLIED_TO':
+            if d.get('relationship') == 'REPLIED_TO' and not d.get('inferred'):
                 # u is the reply message, v is the original message
                 original_msg = v
                 recipient = msg_to_sender.get(original_msg)
@@ -399,8 +599,10 @@ class SocialGraphBuilder:
             undirected_graph = graph.to_undirected()
             communities_list = community.greedy_modularity_communities(undirected_graph)
 
-            # Distinct colors for communities
-            colors = ["#4ECDC4", "#FF6B6B", "#FFD93D", "#A58DFF", "#6BCB77", "#4D96FF", "#F47174"]
+            # Distinct colors for communities. Yellow is deliberately excluded
+            # — it's reserved for topic nodes (see chat_name -> topic node
+            # color below), so a community swatch never gets mistaken for one.
+            colors = ["#4ECDC4", "#FF6B6B", "#F4A261", "#A58DFF", "#6BCB77", "#4D96FF", "#F47174"]
 
             # Map back to graph
             for i, comm_nodes in enumerate(communities_list):

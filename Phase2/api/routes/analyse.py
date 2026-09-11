@@ -7,6 +7,8 @@ from typing import Dict, Any
 from src.chat_parser import ChatParser
 from src.social_graph_builder import SocialGraphBuilder
 from src.llm_service import retrieval_service
+from src.conversation_linker import ConversationLinker
+from src.coref_resolver import get_embedding_texts
 from api.store import analysis_store
 
 router = APIRouter()
@@ -41,16 +43,29 @@ async def analyse_chat(file: UploadFile = File(...)):
         stats = await builder.process_chat_data(messages, chat_name=chat_name)
         
         # Phase 3: Execute Retrieval Embeddings Generation
-        # (1:1 mapping message.content -> Vector)
-        texts = [msg.content for msg in messages]
+        # (1:1 mapping message.content -> Vector). get_embedding_texts only
+        # substitutes coreference-resolved text when
+        # CONVERSATION_LINKING_COREF_ENABLED is set (off by default — see
+        # src/coref_resolver.py); message.content itself is untouched either
+        # way, so nothing else here changes.
+        texts = get_embedding_texts(messages)
         embeddings_matrix = retrieval_service.generate_embeddings(texts)
-        
+
+        # Inferred-link layer: scores untagged message pairs (never ones
+        # already linked by an explicit Slack thread_ts or the WhatsApp
+        # parser's adjacency heuristic) for likely conversational continuity,
+        # reusing the embeddings already computed above. Toggleable off via
+        # CONVERSATION_LINKING_ENABLED without affecting anything else here.
+        linker = ConversationLinker()
+        inferred_links = linker.score_pairs(messages, embeddings_matrix)
+
         # Save to store
         analysis_id = analysis_store.save(
-            builder, 
-            stats, 
-            messages=messages, 
-            embeddings=embeddings_matrix
+            builder,
+            stats,
+            messages=messages,
+            embeddings=embeddings_matrix,
+            inferred_links=inferred_links
         )
 
         return AnalyseResponse(id=analysis_id, stats=stats)

@@ -53,6 +53,25 @@ demo:
     export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 && \
     uv run python Phase2/social_demo.py
 
+# Evaluate the inferred-conversation-linking layer against a Slack export's
+# own thread_ts as ground truth (prints precision/recall)
+eval-linker slack_zip *args:
+    export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 && \
+    uv run python Phase2/scripts/eval_conversation_linker.py {{slack_zip}} {{args}}
+
+# Build a synthetic Slack export (no real export needed) for `just eval-linker`
+build-slack-fixture *args:
+    export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 && \
+    uv run python Phase2/scripts/build_synthetic_slack_export.py {{args}}
+
+# Train the Tier 2 classifier (replaces the hand-tuned weighted sum) on a
+# Slack export's thread_ts as labels. For multiple exports, call
+# Phase2/scripts/train_conversation_linker_classifier.py directly — it takes
+# any number of .zip paths.
+train-linker-classifier slack_zip *args:
+    export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 && \
+    uv run python Phase2/scripts/train_conversation_linker_classifier.py {{slack_zip}} {{args}}
+
 # Clean up temporary files
 clean:
     rm -rf Phase2/frontend/dist

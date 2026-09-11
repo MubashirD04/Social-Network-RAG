@@ -187,48 +187,94 @@ class ChatParser:
                     for user in users_data:
                         user_map[user.get('id')] = user.get('profile', {}).get('real_name') or user.get('name')
 
-            # 2. Parse all other JSON files as channels (excluding users.json, channels.json, integration_logs.json)
+            # 2. Group channel export files by channel first, rather than
+            # parsing file-by-file. A real Slack export nests one JSON file
+            # per *day* under a per-channel folder (e.g.
+            # "engineering/2024-01-15.json", "engineering/2024-01-16.json"),
+            # so the channel is the folder name — using the per-file stem
+            # here (as this used to) reads each day as its own separate
+            # "channel" instead, silently fragmenting every multi-day
+            # channel and breaking thread_ts resolution for any thread whose
+            # reply lands on a different calendar day than its root. A flat
+            # file with no folder (e.g. "engineering.json", or this
+            # project's own single-file test fixtures) still uses the stem.
+            skip_files = {'users.json', 'channels.json', 'integration_logs.json'}
+            files_by_channel: Dict[str, List[str]] = {}
             for filename in z.namelist():
-                if not filename.endswith('.json') or filename in ['users.json', 'channels.json', 'integration_logs.json']:
+                if not filename.endswith('.json') or filename in skip_files:
                     continue
+                path = Path(filename)
+                channel_name = path.parts[0] if len(path.parts) > 1 else path.stem
+                files_by_channel.setdefault(channel_name, []).append(filename)
 
-                with z.open(filename) as f:
-                    channel_msgs = json.load(f)
-                    for idx, msg in enumerate(channel_msgs):
-                        if msg.get('type') != 'message' or msg.get('subtype'):
-                            # Skip subtypes like channel_join, bot_message etc for now
-                            continue
+            for channel_name, filenames in files_by_channel.items():
+                channel_msgs: List[Dict] = []
+                # Sorted so a multi-day export is assembled in chronological
+                # order — ISO date filenames ("2024-01-15.json") sort
+                # correctly as plain strings.
+                for filename in sorted(filenames):
+                    with z.open(filename) as f:
+                        channel_msgs.extend(json.load(f))
 
-                        user_id = msg.get('user')
-                        sender = user_map.get(user_id, user_id) or "Unknown"
-                        
-                        try:
-                            # Slack ts is standard unix timestamp string "1704067140.000100"
-                            ts = float(msg.get('ts', 0))
-                            dt = datetime.fromtimestamp(ts)
-                        except (ValueError, TypeError):
-                            dt = datetime.now()
+                # Slack threads a reply by the parent message's `ts`
+                # (`thread_ts`), not by our own `id` scheme. Build a
+                # ts -> our-message-id lookup across the *whole channel*
+                # (all of its daily files) first, so `thread_ts` can be
+                # resolved to an actual Message.id below instead of being
+                # stored as a raw timestamp that never matches any node the
+                # graph builder looks for — and so a reply on day 2 can
+                # still resolve to a root posted on day 1.
+                ts_to_msg_id = {}
+                for msg in channel_msgs:
+                    if msg.get('type') != 'message' or msg.get('subtype'):
+                        continue
+                    raw_ts = msg.get('ts')
+                    if raw_ts is not None:
+                        ts_to_msg_id[str(raw_ts)] = msg.get('client_msg_id', f"slk_{raw_ts}")
 
-                        # Replicate reply tracking
-                        reply_to = msg.get('thread_ts')
-                        msg_id = msg.get('client_msg_id', f"slk_{ts}")
+                for msg in channel_msgs:
+                    if msg.get('type') != 'message' or msg.get('subtype'):
+                        # Skip subtypes like channel_join, bot_message etc for now
+                        continue
 
-                        # Replicate reactions
-                        reactions_users = []
-                        for reaction in msg.get('reactions', []):
-                            for r_user in reaction.get('users', []):
-                                r_name = user_map.get(r_user, r_user)
-                                if r_name not in reactions_users:
-                                    reactions_users.append(r_name)
+                    user_id = msg.get('user')
+                    sender = user_map.get(user_id, user_id) or "Unknown"
 
-                        parsed_msg = Message(
-                            id=msg_id,
-                            sender=sender,
-                            content=msg.get('text', ''),
-                            timestamp=dt,
-                            reply_to=str(reply_to) if reply_to and str(reply_to) != msg.get('ts') else None,
-                            reactions=reactions_users
-                        )
-                        messages.append(parsed_msg)
+                    try:
+                        # Slack ts is standard unix timestamp string "1704067140.000100"
+                        ts = float(msg.get('ts', 0))
+                        dt = datetime.fromtimestamp(ts)
+                    except (ValueError, TypeError):
+                        dt = datetime.now()
+
+                    # Replicate reply tracking: thread_ts equal to the
+                    # message's own ts just marks it as a thread root
+                    # (not a reply); anything else resolves through the
+                    # map above to the parent's actual message id.
+                    thread_ts = msg.get('thread_ts')
+                    reply_to = None
+                    if thread_ts and str(thread_ts) != str(msg.get('ts')):
+                        reply_to = ts_to_msg_id.get(str(thread_ts))
+
+                    msg_id = msg.get('client_msg_id', f"slk_{msg.get('ts')}")
+
+                    # Replicate reactions
+                    reactions_users = []
+                    for reaction in msg.get('reactions', []):
+                        for r_user in reaction.get('users', []):
+                            r_name = user_map.get(r_user, r_user)
+                            if r_name not in reactions_users:
+                                reactions_users.append(r_name)
+
+                    parsed_msg = Message(
+                        id=msg_id,
+                        sender=sender,
+                        content=msg.get('text', ''),
+                        timestamp=dt,
+                        reply_to=reply_to,
+                        reactions=reactions_users,
+                        channel=channel_name
+                    )
+                    messages.append(parsed_msg)
 
         return messages

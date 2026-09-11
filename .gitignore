@@ -49,3 +49,8 @@ WhatsApp Chat with AI Project Team.txt
 
 # Documentation - Keep by default
 !docs/
+.mcp.json
+
+# Trained model artifacts — regenerate via
+# scripts/train_conversation_linker_classifier.py, not committed as binaries
+Phase2/models/

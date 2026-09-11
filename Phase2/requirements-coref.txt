@@ -1,0 +1,29 @@
+# Optional Tier 2 extra — cross-message coreference resolution
+# (src/coref_resolver.py). NOT installed by default: pulls in torch +
+# transformers (CPU wheels) on top of everything in requirements.txt.
+# Install this only after scripts/eval_conversation_linker.py has shown it's
+# worth the footprint (see docs/context.md for measured size/RAM numbers).
+#
+#   pip install -r requirements-coref.txt
+#   python -m spacy download en_core_web_sm
+#   export CONVERSATION_LINKING_COREF_ENABLED=true
+#
+# transformers<5 is a real, verified pin, not defensive caution: fastcoref
+# 2.1.6 (its latest release) crashes on import of its model
+# (AttributeError: 'FCorefModel' object has no attribute
+# 'all_tied_weights_keys') against transformers 5.x, whose model-loading
+# internals renamed that attribute. Confirmed by installing both and
+# reproducing the crash, then confirming 4.x loads and resolves correctly.
+#
+# torch==2.6.0+cpu is pinned from PyTorch's own CPU-only index — REQUIRED,
+# not optional. Without it, `pip install fastcoref` resolves torch from
+# PyPI's default index, which bundles full CUDA runtime support (the entire
+# NVIDIA CUDA toolkit as transitive deps — cuDNN, cuBLAS, cuSPARSE, triton,
+# etc.), ballooning the install from ~1.2GB to 10GB+. Confirmed by actually
+# building without this pin and getting a 12.2GB image. This project is
+# CPU-only end to end; there is no GPU to justify that weight.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.6.0+cpu
+fastcoref
+transformers<5
+spacy

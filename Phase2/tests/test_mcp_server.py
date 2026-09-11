@@ -36,6 +36,22 @@ def _people_payload():
     ]
 
 
+def test_get_inferred_links_passes_through_edge_list():
+    captured_url = {}
+
+    async def fake_get(self, url, *args, **kwargs):
+        captured_url["url"] = url
+        return _FakeResponse(200, {"links": [
+            {"message_id_a": "1", "message_id_b": "2", "score": 0.7, "signals": {}}
+        ]})
+
+    with patch("httpx.AsyncClient.get", new=fake_get):
+        result = asyncio.run(mcp_server_module.get_inferred_links("some-id"))
+
+    assert captured_url["url"].endswith("/graph/some-id/inferred-links")
+    assert result["links"][0]["message_id_a"] == "1"
+
+
 def test_get_person_network_handles_bare_list_response():
     async def fake_get(self, url, *args, **kwargs):
         return _FakeResponse(200, _people_payload())

@@ -6,24 +6,87 @@
   background-color: #1a1525;
 }
 
+.app-container.landing-mode {
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+}
+
+/* --- Landing page --- */
+.landing-page {
+  position: relative;
+  min-height: 100vh;
+  background: var(--bg-dark);
+}
+
+.network-background {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.landing-content {
+  position: relative;
+  z-index: 1;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 5rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.landing-hero {
+  text-align: center;
+  max-width: 680px;
+  margin-bottom: 2.5rem;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-teal);
+  margin-bottom: 1.5rem;
+}
+
+.landing-hero h1 {
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 1rem;
+  background: linear-gradient(135deg, var(--text-main) 40%, var(--accent-teal));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.landing-subtitle {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
 /* --- Drop Zone --- */
 .drop-zone {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: var(--bg-dark);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  transition: opacity 0.5s ease;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto 5rem;
 }
 
 .drop-content {
   text-align: center;
-  padding: 3rem 4rem;
+  padding: 3rem 2.5rem;
   border: 2px dashed var(--glass-border);
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(8px);
   transition: all 0.3s ease;
   cursor: pointer;
 }
@@ -35,14 +98,14 @@
 }
 
 .icon-large {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   color: var(--accent-teal);
   margin-bottom: 1rem;
 }
 
-.drop-content h1 {
-  font-size: 2rem;
+.drop-content h2 {
+  font-size: 1.6rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
 }
@@ -56,6 +119,138 @@
   font-size: 0.9rem;
   color: var(--text-muted);
   opacity: 0.7;
+}
+
+/* --- Landing sections (capabilities, code example) --- */
+.landing-section {
+  width: 100%;
+  margin-bottom: 4.5rem;
+}
+
+.landing-section:last-child {
+  margin-bottom: 0;
+}
+
+.landing-section-title {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.landing-section-lead {
+  text-align: center;
+  color: var(--text-muted);
+  max-width: 520px;
+  margin: 0 auto 1.75rem;
+  line-height: 1.6;
+}
+
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.capability-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 1.5rem;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.capability-card:hover {
+  border-color: var(--accent-teal);
+  transform: translateY(-2px);
+}
+
+.capability-icon {
+  color: var(--accent-teal);
+  margin-bottom: 0.75rem;
+}
+
+.capability-card h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.capability-card p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* --- Code example window --- */
+.code-window {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  background: #14161d;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.code-window-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.code-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.code-window-title {
+  margin-left: 10px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.code-window-body {
+  margin: 0;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
+.code-line {
+  white-space: pre;
+}
+
+.tok-k { color: #F472B6; }
+.tok-s { color: #FFD93D; }
+.tok-c { color: var(--text-muted); font-style: italic; }
+.tok-p { color: #E4E6EB; }
+
+@media (max-width: 700px) {
+  .capability-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .landing-hero h1 {
+    font-size: 1.9rem;
+  }
+}
+
+@media (max-width: 460px) {
+  .capability-grid {
+    grid-template-columns: 1fr;
+  }
+  .drop-content {
+    padding: 2.5rem 1.5rem;
+  }
 }
 
 /* --- Top Bar --- */
@@ -232,18 +427,102 @@
 .result-sender { font-weight: 600; color: var(--accent-teal); }
 .result-text { font-size: 0.9rem; }
 
+/* Same muted blue-gray as the graph's dashed inferred-link edges, so the two
+   related-but-separate signals read as visually connected. */
+.linked-context {
+  margin-top: 10px;
+  padding-left: 10px;
+  border-left: 2px dashed rgba(160, 180, 200, 0.5);
+}
+.linked-context-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(160, 180, 200, 0.9);
+  margin-bottom: 4px;
+}
+.linked-context-item {
+  font-size: 0.8rem;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.linked-context-item:hover .linked-context-text { color: var(--text-main); }
+.linked-context-sender { font-weight: 600; color: rgba(160, 180, 200, 0.9); margin-right: 6px; }
+.linked-context-text { color: var(--text-muted); }
+
 /* --- Legend --- */
 .legend-panel {
   position: fixed;
   bottom: 20px;
   right: 20px;
   padding: 15px;
-  max-width: 260px;
+  width: 260px;
   z-index: 80;
 }
-.legend-panel h4 { margin-bottom: 10px; font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+.legend-panel h4 { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+.legend-toggle {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  background: none; border: none; color: inherit; cursor: pointer; padding: 0;
+}
+.legend-toggle:hover h4 { color: var(--text-primary, #fff); }
+.legend-toggle svg {
+  color: var(--text-muted); flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+.legend-toggle svg.legend-chevron-collapsed {
+  transform: rotate(180deg);
+}
+
+/* Grid-rows trick animates smoothly from/to auto height without a fixed
+   max-height guess; the inner div supplies the overflow clip the trick
+   needs. */
+.legend-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.3s ease, margin-top 0.3s ease;
+  margin-top: 10px;
+}
+.legend-collapse.collapsed {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+}
+.legend-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+.legend-collapse.collapsed .legend-collapse-inner {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.topic-count-control {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.topic-count-control label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.topic-count-control label strong { color: var(--text-main); }
+.topic-count-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-teal);
+}
+
 .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; margin-bottom: 5px; flex-wrap: wrap; }
 .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .person-dot { background: var(--accent-teal); }
 .topic-dot { background: var(--accent-yellow); }
 .message-dot { background: var(--accent-blue); }
+.inferred-link-swatch {
+  display: inline-block;
+  width: 20px;
+  height: 0;
+  border-top: 2px dashed rgba(160, 180, 200, 0.9);
+  flex-shrink: 0;
+}

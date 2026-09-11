@@ -8,13 +8,14 @@ class AnalysisStore:
         self._store: Dict[str, Dict[str, Any]] = {}
         self.ttl_seconds = ttl_seconds
 
-    def save(self, builder: SocialGraphBuilder, stats: Dict[str, Any], messages: list = None, embeddings: Any = None) -> str:
+    def save(self, builder: SocialGraphBuilder, stats: Dict[str, Any], messages: list = None, embeddings: Any = None, inferred_links: list = None) -> str:
         analysis_id = str(uuid.uuid4())
         self._store[analysis_id] = {
             "builder": builder,
             "stats": stats,
             "messages": messages,
             "embeddings": embeddings,
+            "inferred_links": inferred_links or [],
             "timestamp": time.time()
         }
         return analysis_id

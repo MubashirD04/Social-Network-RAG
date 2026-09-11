@@ -121,19 +121,78 @@ def test_parse_slack(temp_workspace):
             "reactions": [
                 {"name": "thumbsup", "users": ["U1"]}
             ]
+        },
+        {
+            # Slack addresses a reply's parent by the parent's `ts`
+            # ("1704067140.0"), never by the parent's client_msg_id
+            # ("msg1"). reply_to must resolve to "msg1" here, not be left
+            # as the raw timestamp string — that's the bug this regression
+            # test guards: a reply stored as a timestamp never matches any
+            # node id downstream in the graph builder, so the REPLIED_TO
+            # edge silently never gets drawn.
+            "type": "message",
+            "user": "U2",
+            "text": "Replying to Alice's message",
+            "ts": "1704067160.0",
+            "thread_ts": "1704067140.0",
+            "client_msg_id": "msg3"
         }
     ]
-    
+
     with zipfile.ZipFile(file_path, 'w') as z:
         z.writestr('users.json', json.dumps(users))
         z.writestr('general/updates.json', json.dumps(channel_msgs))
-        
+
     messages = ChatParser.parse_file(file_path)
-    
-    assert len(messages) == 2
+
+    assert len(messages) == 3
     assert messages[0].sender == "Alice"
     assert messages[0].id == "msg1"
-    
+
     assert messages[1].sender == "Bob"
     assert "Alice" in messages[1].reactions
     assert messages[1].content == "With reaction"
+    assert messages[1].reply_to is None
+
+    assert messages[2].reply_to == "msg1"
+
+def test_parse_slack_resolves_channel_and_threads_across_multiple_daily_files(temp_workspace):
+    """
+    Regression test: a real Slack export nests one JSON file per day under a
+    per-channel folder (e.g. "engineering/2024-01-15.json"). Deriving the
+    channel from the per-file stem instead of the folder used to read each
+    day as its own separate "channel" — fragmenting a multi-day channel and
+    breaking thread_ts resolution for any thread whose reply landed on a
+    different calendar day than its root, since the ts -> id lookup was
+    rebuilt fresh per file instead of spanning the whole channel.
+    """
+    file_path = temp_workspace / "slack_export.zip"
+
+    users = [{"id": "U1", "profile": {"real_name": "Alice"}}, {"id": "U2", "name": "Bob"}]
+
+    day1_msgs = [
+        {
+            "type": "message", "user": "U1", "text": "Kicking off the migration today",
+            "ts": "1704067140.0", "client_msg_id": "root1"
+        },
+    ]
+    day2_msgs = [
+        {
+            # Reply lands the next day, threaded to a root from day1's file.
+            "type": "message", "user": "U2", "text": "Sounds good, I'll start on the schema",
+            "ts": "1704153600.0", "thread_ts": "1704067140.0", "client_msg_id": "reply1"
+        },
+    ]
+
+    with zipfile.ZipFile(file_path, 'w') as z:
+        z.writestr('users.json', json.dumps(users))
+        z.writestr('engineering/2024-01-01.json', json.dumps(day1_msgs))
+        z.writestr('engineering/2024-01-02.json', json.dumps(day2_msgs))
+
+    messages = ChatParser.parse_file(file_path)
+
+    assert len(messages) == 2
+    assert all(m.channel == "engineering" for m in messages)
+
+    reply = next(m for m in messages if m.id == "reply1")
+    assert reply.reply_to == "root1"

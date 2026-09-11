@@ -11,16 +11,16 @@ This project identifies key influencers, information brokers, and community clus
 The system operates in a structured pipeline:
 
 1.  **Ingestion**: Raw exports from WhatsApp (.txt), Telegram (.json), or Slack (.zip) are parsed and normalized into a standard message schema. See [docs/data-export-guide.md](docs/data-export-guide.md) for step-by-step instructions on exporting each one.
-2.  **Graph Construction**: Builds a directed graph of social interactions (Replies, Mentions, Reactions).
+2.  **Graph Construction**: Builds a directed graph of social interactions (Replies, Mentions, Reactions), plus inferred connections between unthreaded messages that clearly continue one conversation (shared wording, same channel, short time window) — kept visually and numerically distinct from confirmed connections so a guess never inflates anyone's influence score.
 3.  **Local Analysis**:
-    - **KeyBERT**: Extracts main conversation topics locally.
+    - **YAKE**: Extracts main conversation topics locally (unsupervised, no embeddings).
     - **NetworkX**: Calculates PageRank (Influence) and Betweenness Centrality (Info Brokers).
     - **Greedy Modularity**: Detects community clusters/sub-groups.
-4.  **Retrieval Layer**: Uses `sentence-transformers` to generate text embeddings for every message, enabling semantic search via Cosine Similarity.
+4.  **Retrieval Layer**: Uses `fastembed` (ONNX Runtime, no PyTorch) to generate text embeddings for every message, enabling semantic search via Cosine Similarity. A second, richer **inferred-conversation-linking layer** (`src/conversation_linker.py`) scores untagged message pairs — ones with no explicit reply — for likely conversational continuity (semantic similarity, temporal proximity, speaker turn-taking, shared keywords), and surfaces the result as extra `linked_context` on search results. See [docs/context.md](docs/context.md) for the full design, including an optional Tier 2 trained-classifier scoring mode and optional coreference-resolution preprocessing.
 5.  **Interfaces**:
     - **API**: A FastAPI service exposing endpoints for analysis and retrieval.
     - **MCP**: A server that allows AI assistants (like Claude) to trigger analyses and query results directly.
-    - **Web UI**: (Phase 5) Interactive graph exploration in the browser.
+    - **Web UI**: Interactive graph exploration and semantic search in the browser.
 
 ## Getting Started
 
@@ -54,6 +54,18 @@ You will typically need two or three terminals:
     ```bash
     just inspect
     ```
+
+Alternatively, run the API and frontend together in the background with a single command:
+
+```bash
+just start
+```
+
+This logs the API to `/tmp/social-rag-api.log` and the frontend to `/tmp/social-rag-frontend.log`. Stop both with:
+
+```bash
+just stop
+```
 
 
 ## Phase 5: Modern React Web UI
@@ -91,6 +103,13 @@ The root `Dockerfile` builds and serves the whole app as a single container: a N
 ```bash
 docker build -t social-network-rag .
 docker run -p 8000:8000 social-network-rag
+```
+
+This builds and runs the default image (~1.3GB, build-verified) — Tier 1 of the conversation-linking layer only, no optional Tier 2 extras. Tier 2 coreference resolution lives in a separate, opt-in build stage that a plain `docker build .` never reaches:
+
+```bash
+docker build --target runtime-coref -t social-network-rag:coref .
+docker run -p 8000:8000 -e CONVERSATION_LINKING_COREF_ENABLED=true social-network-rag:coref
 ```
 
 Hosted on **Hugging Face Spaces** (Docker SDK, 16GB RAM / 2 vCPU). Because `api/store.py`'s analysis store lives in process memory with no shared backing store, the service must run as a single instance — see [docs/context.md](docs/context.md#deployment) for the full rationale and the memory-profiling notes behind the current embedding-batch-size choice in `src/llm_service.py`.
@@ -174,12 +193,14 @@ After restarting, you should see the `SocialNetworkRAG` tools available in the p
 - **Run Tests**: `just test` (or `PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 uv run pytest Phase2/tests -v`)
 - **Manual Demo**: `just demo` (or `PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 uv run python Phase2/social_demo.py`) — generates a sample graph in `output/`
 - **Large Scale Test**: `PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 uv run python Phase2/tests/large_social_test.py`
+- **Conversation-linking layer**: `just build-slack-fixture` generates a synthetic Slack export; `just eval-linker <slack.zip>` reports precision/recall against its own `thread_ts` (the only real ground truth available); `just train-linker-classifier <slack.zip>` trains the optional Tier 2 classifier scoring mode. See [docs/context.md](docs/context.md) and [docs/conversation-linking-remaining-work.md](docs/conversation-linking-remaining-work.md).
 
 ## Visualization Legend
 
-- **Teal Nodes**: People
-- **Yellow Diamonds**: Topics
+- **Person Nodes**: Colored by detected community (gray if not in one)
+- **Yellow Diamonds**: Topics (pick 5-10 shown via the in-app slider)
 - **Light Blue Ellipses**: Messages
-- **Yellow Arrows**: Reply chains
+- **Yellow Arrows**: Confirmed reply chains (explicit reply or an opening @mention)
+- **Dashed Gray Arrows**: Inferred connections — messages that share distinctive wording but were never formally threaded. Toggleable in the app, and excluded from every influence/broker/community score regardless of whether they're shown.
 - **Node Size**: Reflects Influence (PageRank)
-- **Node Color**: Reflects Detected Community Grouping
+- **Linked Context** (search panel): a richer, separate signal from the graph's dashed arrows above — semantic similarity, temporal proximity, speaker turn-taking, and shared keywords, not just wording overlap. Shown under a search result when it connects to another message with no explicit reply between them; click to jump to it in the graph.
