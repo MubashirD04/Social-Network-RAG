@@ -1,6 +1,5 @@
 import networkx as nx
 import numpy as np
-from pyvis.network import Network
 from src.social_models import Message
 from src.llm_service import retrieval_service
 from typing import List, Dict, Any
@@ -659,6 +658,8 @@ class SocialGraphBuilder:
         return sorted(report, key=lambda x: x['message_count'], reverse=True)
 
     def visualize(self, output_file: str = "social_network.html"):
+        from pyvis.network import Network
+
         # pyvis's own Network.__init__ declares font_color=False with no type
         # annotation, so Pylance infers a bool param and flags this string —
         # pyvis accepts and uses a color string here fine at runtime.

@@ -123,3 +123,9 @@ def test_graph_data_endpoint():
     assert any(n["id"] == "p_Alice" for n in data["nodes"])
     assert len(data["edges"]) > 0
     assert all("source" in e and "target" in e for e in data["edges"])
+
+
+def test_embeddings_are_float32():
+    from src.llm_service import retrieval_service
+
+    assert retrieval_service.generate_embeddings(["hello", "world"]).dtype.name == "float32"

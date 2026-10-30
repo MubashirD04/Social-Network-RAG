@@ -2,10 +2,12 @@
 
 # ---- Stage 1: build the React frontend ----
 FROM node:20-slim AS frontend-build
-WORKDIR /build
+WORKDIR /build/Phase2/frontend
 COPY Phase2/frontend/package.json Phase2/frontend/package-lock.json ./
 RUN npm ci
 COPY Phase2/frontend/ ./
+# The browser worker bundles the Python sources from ../src.
+COPY Phase2/src ../src
 RUN npm run build
 
 # ---- Stage 2: backend runtime ----
@@ -42,7 +44,7 @@ ENV HF_HUB_OFFLINE=1 \
 
 COPY Phase2/api ./api
 COPY Phase2/src ./src
-COPY --from=frontend-build /build/dist ./frontend/dist
+COPY --from=frontend-build /build/Phase2/frontend/dist ./frontend/dist
 
 RUN useradd --create-home --uid 1000 appuser \
     && chown -R appuser:appuser /app /tmp/fastembed_cache

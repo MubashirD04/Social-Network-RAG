@@ -1,6 +1,5 @@
 import gc
 from typing import List, Optional, Set
-from fastembed import TextEmbedding
 import numpy as np
 
 # fastembed/onnxruntime's peak memory grows with the size of a single
@@ -17,28 +16,41 @@ class LLMService:
     """
 
     def __init__(self):
-        print("Loading fastembed model...")
-        self.embedder = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        self._dimension = len(next(iter(self.embedder.embed(["dimension probe"]))))
-        print(f"Embeddings model loaded successfully (dimension: {self._dimension})")
+        self._embedder = None
+        self._dimension = None
+
+    @property
+    def embedder(self):
+        # Loaded on first use so the browser build, which embeds with
+        # transformers.js and has no fastembed, can still import this module
+        # for extract_topics and top_k_by_embedding.
+        if self._embedder is None:
+            from fastembed import TextEmbedding
+
+            print("Loading fastembed model...")
+            self._embedder = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+            self._dimension = len(next(iter(self._embedder.embed(["dimension probe"]))))
+            print(f"Embeddings model loaded successfully (dimension: {self._dimension})")
+        return self._embedder
 
     def generate_embeddings(self, texts: List[str]) -> np.ndarray:
         """
         Generate embeddings for a list of texts using local model.
-        Returns a numpy array of embeddings.
+        Returns a float32 numpy array of embeddings.
         """
         if not texts:
-            return np.array([])
+            return np.array([], dtype=np.float32)
 
         chunks = []
         for i in range(0, len(texts), _EMBED_CHUNK_SIZE):
             batch = texts[i:i + _EMBED_CHUNK_SIZE]
-            chunks.append(np.array(list(self.embedder.embed(batch))))
+            chunks.append(np.array(list(self.embedder.embed(batch)), dtype=np.float32))
             gc.collect()
 
         return np.vstack(chunks)
 
     def get_embeddings_dimension(self) -> int:
+        self.embedder
         return self._dimension
 
     def get_top_k_similar(self, query: str, embeddings: np.ndarray, k: int = 5) -> List[tuple[int, float]]:
@@ -50,6 +62,14 @@ class LLMService:
             return []
 
         query_embedding = self.generate_embeddings([query])[0]
+        return self.top_k_by_embedding(query_embedding, embeddings, k)
+
+    @staticmethod
+    def top_k_by_embedding(query_embedding: np.ndarray, embeddings: np.ndarray, k: int = 5) -> List[tuple[int, float]]:
+        """Same ranking as get_top_k_similar, for callers that already have
+        the query's embedding."""
+        if embeddings.shape[0] == 0:
+            return []
 
         # Calculate cosine similarity using numpy dot product
         # normalise vectors to unit length first

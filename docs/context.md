@@ -495,3 +495,13 @@ The `sentence-transformers/all-MiniLM-L6-v2` ONNX model is baked into the image 
 **Memory profiling finding** (see git history around `src/llm_service.py` for the fix): embedding an entire chat's messages in one `fastembed.embed()` call caused peak RSS to scale with message count and never release — independent of thread count or the ONNX Runtime CPU memory arena setting (both were profiled and ruled out as the cause). A 3,000-message chat could peak over 2GB on embeddings alone, dwarfing the graph-building cost. Fixed by chunking `generate_embeddings()` into batches of 32 with `gc.collect()` between chunks — cut peak RSS by roughly 70% (3,000-message chat: ~2.1GB → ~560MB, isolated embedding-only measurement). At the 16GB/2vCPU tier this is ample headroom either way, but the fix is what makes the app viable on much smaller hosts too, if ever moved off Spaces.
 
 **Still true regardless of host RAM**: the single-instance constraint from the in-memory `AnalysisStore` (see Known Limitations) — don't enable autoscaling/multiple replicas without moving analysis storage out of process memory first.
+
+## Browser build
+
+`frontend/src/pipeline/worker.js` runs the pipeline off the main thread: Pyodide 0.29.0 executes `src/browser_entry.py`, and transformers.js 3.7.5 embeds with q8 `Xenova/all-MiniLM-L6-v2`. `src/analysis.py` holds the logic shared with the FastAPI routes, which keep using fastembed. `fastembed` and `pyvis` load lazily because neither exists in the browser. The Python sources are bundled with `import.meta.glob`, so the frontend build needs `Phase2/src` alongside it.
+
+Packages install with `deps=False` because Pyodide's networkx package pulls in matplotlib, pillow and fonttools, none of which this pipeline uses.
+
+Threading needs a cross-origin isolated page. `vite.config.js` and `vercel.json` both send `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless`, which keeps the CDN downloads working without CORP headers. Browsers without `credentialless` support fall back to 1 thread.
+
+Measured on an M4 Max through the real upload control, using a synthetic 5,000-message chat with 4 threads: 57s total, of which embedding took 45s and graph building plus linking took 11s. Startup took about 17s on a repeat visit. YAKE accounts for about 84% of native graph and linker CPU, mostly `conversation_linker._get_keywords`.

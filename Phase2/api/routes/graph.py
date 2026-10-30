@@ -1,8 +1,7 @@
-from typing import Any, Dict, List
-
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+from src.analysis import build_query_results, serialize_graph_data
 from src.llm_service import retrieval_service
 from api.store import analysis_store
 
@@ -22,23 +21,6 @@ class TopicCountRequest(BaseModel):
     # Keeps the topic layer from either being too sparse to be useful or
     # dense enough to clutter the graph for a viewer skimming it.
     top_n: int = Field(ge=5, le=10)
-
-def serialize_graph_data(builder):
-    graph = builder.graph
-
-    nodes = []
-    for node_id, data in graph.nodes(data=True):
-        node_dict = {"id": node_id}
-        node_dict.update(data)
-        nodes.append(node_dict)
-
-    edges = []
-    for source, target, data in graph.edges(data=True):
-        edge_dict = {"source": source, "target": target}
-        edge_dict.update(data)
-        edges.append(edge_dict)
-
-    return {"nodes": nodes, "edges": edges}
 
 def get_analysis_or_404(analysis_id: str):
     analysis = analysis_store.get(analysis_id)
@@ -119,58 +101,7 @@ async def query_chat(id: str, request: QueryRequest):
 
     top_k_results = retrieval_service.get_top_k_similar(request.query, embeddings, k=request.top_k)
 
-    linked_context = _build_linked_context(analysis, messages, top_k_results) if request.include_linked_context else {}
-
-    results = []
-    for idx, score in top_k_results:
-        msg = messages[idx]
-        entry = {
-            "message_id": msg.id,
-            "sender": msg.sender,
-            "timestamp": msg.timestamp.isoformat(),
-            "content": msg.content,
-            "score": score
-        }
-        if msg.id in linked_context:
-            entry["linked_context"] = linked_context[msg.id]
-        results.append(entry)
-
-    return {"results": results}
-
-def _build_linked_context(analysis, messages, top_k_results) -> Dict[str, List[Dict[str, Any]]]:
-    """For each top-k hit, pulls in the messages the inferred-link layer
-    connected it to — context beyond simple adjacency or explicit threads
-    that a plain nearest-embedding search alone would miss."""
-    inferred_links = analysis.get("inferred_links") or []
-    if not inferred_links:
-        return {}
-
-    msg_by_id = {msg.id: msg for msg in messages}
-    adjacency: Dict[str, List] = {}
-    for link in inferred_links:
-        adjacency.setdefault(link.message_id_a, []).append(link)
-        adjacency.setdefault(link.message_id_b, []).append(link)
-
-    linked_context: Dict[str, List[Dict[str, Any]]] = {}
-    for idx, _score in top_k_results:
-        msg = messages[idx]
-        neighbors = []
-        for link in adjacency.get(msg.id, []):
-            other_id = link.message_id_b if link.message_id_a == msg.id else link.message_id_a
-            other = msg_by_id.get(other_id)
-            if other is None:
-                continue
-            neighbors.append({
-                "message_id": other.id,
-                "sender": other.sender,
-                "timestamp": other.timestamp.isoformat(),
-                "content": other.content,
-                "link_score": link.score
-            })
-        if neighbors:
-            linked_context[msg.id] = neighbors
-
-    return linked_context
+    return {"results": build_query_results(analysis, top_k_results, request.include_linked_context)}
 
 @router.get("/{id}/inferred-links")
 async def get_inferred_links(id: str):

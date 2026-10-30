@@ -5,9 +5,8 @@ from pydantic import BaseModel
 from typing import Dict, Any
 
 from src.chat_parser import ChatParser
-from src.social_graph_builder import SocialGraphBuilder
+from src.analysis import run_analysis
 from src.llm_service import retrieval_service
-from src.conversation_linker import ConversationLinker
 from src.coref_resolver import get_embedding_texts
 from api.store import analysis_store
 
@@ -37,11 +36,8 @@ async def analyse_chat(file: UploadFile = File(...)):
         finally:
             os.unlink(tmp_path)
         
-        # Run graph builder
-        builder = SocialGraphBuilder()
         chat_name = os.path.splitext(file.filename)[0]
-        stats = await builder.process_chat_data(messages, chat_name=chat_name)
-        
+
         # Phase 3: Execute Retrieval Embeddings Generation
         # (1:1 mapping message.content -> Vector). get_embedding_texts only
         # substitutes coreference-resolved text when
@@ -51,24 +47,18 @@ async def analyse_chat(file: UploadFile = File(...)):
         texts = get_embedding_texts(messages)
         embeddings_matrix = retrieval_service.generate_embeddings(texts)
 
-        # Inferred-link layer: scores untagged message pairs (never ones
-        # already linked by an explicit Slack thread_ts or the WhatsApp
-        # parser's adjacency heuristic) for likely conversational continuity,
-        # reusing the embeddings already computed above. Toggleable off via
-        # CONVERSATION_LINKING_ENABLED without affecting anything else here.
-        linker = ConversationLinker()
-        inferred_links = linker.score_pairs(messages, embeddings_matrix)
+        analysis = await run_analysis(messages, embeddings_matrix, chat_name)
 
         # Save to store
         analysis_id = analysis_store.save(
-            builder,
-            stats,
+            analysis["builder"],
+            analysis["stats"],
             messages=messages,
             embeddings=embeddings_matrix,
-            inferred_links=inferred_links
+            inferred_links=analysis["inferred_links"]
         )
 
-        return AnalyseResponse(id=analysis_id, stats=stats)
+        return AnalyseResponse(id=analysis_id, stats=analysis["stats"])
         
     except HTTPException:
         raise

@@ -1,0 +1,15 @@
+{
+  "framework": null,
+  "installCommand": "cd Phase2/frontend && npm ci",
+  "buildCommand": "cd Phase2/frontend && npm run build",
+  "outputDirectory": "Phase2/frontend/dist",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "credentialless" }
+      ]
+    }
+  ]
+}
