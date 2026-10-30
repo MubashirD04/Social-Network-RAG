@@ -97,23 +97,24 @@ npm run build
 
 Import the repo into Vercel and leave the root directory as the repo root. `vercel.json` builds `Phase2/frontend` as a static site and sets the COOP/COEP headers that multi-threading needs. Pyodide and the model load from public CDNs, so they don't use the site's own bandwidth.
 
-### FastAPI service (Docker)
+### FastAPI service (local)
 
-The root `Dockerfile` builds and serves the whole app as a single container: a Node stage builds the React frontend, and a Python stage runs the FastAPI backend, which serves that build directly (`Phase2/frontend/dist`) alongside the API — one image, one port, nothing else to host separately. The embedding model is baked into the image at build time, so the container needs no network access at startup.
-
-```bash
-docker build -t social-network-rag .
-docker run -p 8000:8000 social-network-rag
-```
-
-This builds and runs the default image (~1.3GB, build-verified) — Tier 1 of the conversation-linking layer only, no optional Tier 2 extras. Tier 2 coreference resolution lives in a separate, opt-in build stage that a plain `docker build .` never reaches:
+The REST API and MCP server run locally with `uv`:
 
 ```bash
-docker build --target runtime-coref -t social-network-rag:coref .
-docker run -p 8000:8000 -e CONVERSATION_LINKING_COREF_ENABLED=true social-network-rag:coref
+just install
+just api
 ```
 
-This image serves the web app too, but without the COOP/COEP headers, so embedding stays on 1 thread there. Because `api/store.py`'s analysis store lives in process memory with no shared backing store, the service must run as a single instance — see [docs/context.md](docs/context.md#deployment) for the full rationale and the memory-profiling notes behind the current embedding-batch-size choice in `src/llm_service.py`.
+Because `api/store.py`'s analysis store lives in process memory with no shared backing store, the service must run as a single instance — see [docs/context.md](docs/context.md#deployment) for the full rationale and the memory-profiling notes behind the current embedding-batch-size choice in `src/llm_service.py`.
+
+Tier 2 coreference resolution is optional, and only affects the local service:
+
+```bash
+uv pip install -r Phase2/requirements-coref.txt
+uv run python -m spacy download en_core_web_sm
+export CONVERSATION_LINKING_COREF_ENABLED=true
+```
 
 ## Testing on Linux
 

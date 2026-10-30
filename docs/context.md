@@ -173,7 +173,7 @@ A second, separate inferred-link layer — richer than `_infer_lexical_continuit
 
 `ConversationLinker.score_pairs(messages, embeddings)` scores candidate pairs of messages that have no `reply_to` set (real Slack `thread_ts` or the WhatsApp parser's own adjacency heuristic both count as "already linked" and are skipped as inference sources — explicit/prior signal always wins) using a weighted combination of four signals:
 
-- **Semantic similarity** — cosine similarity between MiniLM embeddings. Reuses the embeddings already computed by `retrieval_service.generate_embeddings` in `POST /analyse` (index-aligned with `messages`) rather than loading a second model — the project already bakes `sentence-transformers/all-MiniLM-L6-v2` into the image via `fastembed` (ONNX Runtime, no PyTorch); adding the `sentence-transformers` package on top would mean shipping PyTorch for a model that's already loaded.
+- **Semantic similarity** — cosine similarity between MiniLM embeddings. Reuses the embeddings already computed by `retrieval_service.generate_embeddings` in `POST /analyse` (index-aligned with `messages`) rather than loading a second model — the project already loads `sentence-transformers/all-MiniLM-L6-v2` via `fastembed` (ONNX Runtime, no PyTorch); adding the `sentence-transformers` package on top would mean shipping PyTorch for a model that's already loaded.
 - **Temporal proximity** — exponential decay over the time gap, with a separate decay constant for Slack (`CONVERSATION_LINKING_SLACK_DECAY_MINUTES`, default 12) vs. WhatsApp/Telegram (`CONVERSATION_LINKING_DEFAULT_DECAY_MINUTES`, default 6), keyed on whether the message has a `channel`.
 - **Speaker turn-taking** — boosts pairs where the two speakers have been rapidly alternating in the preceding `CONVERSATION_LINKING_TURN_TAKING_WINDOW` messages.
 - **Lexical overlap** — Jaccard similarity between per-message YAKE keyword sets (a new, small per-message extraction — distinct from `extract_topics`' whole-chat extraction).
@@ -198,7 +198,7 @@ Output is a flat `List[InferredLink]` (`message_id_a`, `message_id_b`, `score`, 
 
 #### Tier 2: coreference resolution (`src/coref_resolver.py`)
 
-Optional and **off by default** — the one piece of this feature that pulls in PyTorch + `transformers` (via `fastcoref`'s `FCoref` model, `biu-nlp/f-coref` on the Hugging Face Hub), which the rest of this project has deliberately avoided (see the `sentence-transformers` note above). Not in `requirements.txt`; lives in `Phase2/requirements-coref.txt` instead, and the default Docker build never installs it — see the Dockerfile's `runtime-coref` stage (`docker build --target runtime-coref`), which is not the default build target.
+Optional and **off by default** — the one piece of this feature that pulls in PyTorch + `transformers` (via `fastcoref`'s `FCoref` model, `biu-nlp/f-coref` on the Hugging Face Hub), which the rest of this project has deliberately avoided (see the `sentence-transformers` note above). Not in `requirements.txt`; lives in `Phase2/requirements-coref.txt` instead.
 
 `CorefResolver` wraps fastcoref's spaCy pipeline component: `spacy.load("en_core_web_sm", disable=["parser", "ner", "lemmatizer"])` + `nlp.add_pipe("fastcoref", config={"device": "cpu"})`. **`spacy.blank("en")` does not work here** — fastcoref's `resolve_text=True` only substitutes a mention if some span in its cluster has a `NOUN`/`PROPN` `token.pos_`, and a blank pipeline never runs a tagger, so `pos_` is always empty. This was caught by actually running it: the coref model found correct clusters either way, but `resolved_text` was silently identical to the input every time under `spacy.blank`, and started resolving correctly the moment `en_core_web_sm` (~15MB, real tagger) was used instead. `en_core_web_sm` needs its own download step (`python -m spacy download en_core_web_sm`), separate from `pip install`.
 
@@ -208,9 +208,7 @@ Optional and **off by default** — the one piece of this feature that pulls in 
 
 **`transformers<5` is a required, verified pin** in `requirements-coref.txt`, not defensive caution: fastcoref 2.1.6 (its latest release, as of writing) crashes loading its model against `transformers` 5.x (`AttributeError: 'FCorefModel' object has no attribute 'all_tied_weights_keys'` — a renamed internal in `transformers`' newer model-loading code that fastcoref's pinned-loose `transformers>=4.11.3` requirement doesn't guard against). Confirmed by installing both and reproducing the crash, then confirming the 4.x line loads and resolves correctly.
 
-**Measured, not estimated** (real `pip install` + real model load + real inference, in an isolated venv — see the size/RAM discussion this was researched for): the full dependency closure (torch CPU, transformers, spacy, fastcoref, and their transitive deps including `datasets`/`pyarrow`/`pandas`) installs to **~1.2GB**; `numpy`/`scipy`/`networkx` within that are already required by `requirements.txt` so don't count as incremental. The `biu-nlp/f-coref` model weights are **364.8MB** (confirmed via the HF Hub API), `en_core_web_sm` is **~15MB**. Net incremental Docker image size: **roughly 1.5GB**. Peak RSS for a single process actually loading the pipeline and resolving a small multi-message batch: **~800MB** (measured via `resource.getrusage`; import overhead alone — torch + transformers + spacy, before any model loads — accounts for ~450MB of that). Both numbers were measured on macOS/ARM; Linux/x86_64 in the actual deployment target should be the same order of magnitude, not verified identical.
-
-The Docker `runtime-coref` stage's build steps mirror exactly what was measured working in the isolated venv (same imports, same `spacy.load`/`add_pipe` calls, same `transformers<5` pin) but the Dockerfile itself has not been build-tested end to end (a real `docker build` would take a while to pull ~1.5GB of layers) — treat the stage as unverified until someone runs it for real, even though its logic matches verified-working code.
+**Measured, not estimated** (real `pip install` + real model load + real inference, in an isolated venv — see the size/RAM discussion this was researched for): the full dependency closure (torch CPU, transformers, spacy, fastcoref, and their transitive deps including `datasets`/`pyarrow`/`pandas`) installs to **~1.2GB**; `numpy`/`scipy`/`networkx` within that are already required by `requirements.txt` so don't count as incremental. The `biu-nlp/f-coref` model weights are **364.8MB** (confirmed via the HF Hub API), `en_core_web_sm` is **~15MB**. Net incremental install size: **roughly 1.5GB**. Peak RSS for a single process actually loading the pipeline and resolving a small multi-message batch: **~800MB** (measured via `resource.getrusage`; import overhead alone — torch + transformers + spacy, before any model loads — accounts for ~450MB of that). Both numbers were measured on macOS/ARM; Linux/x86_64 in the actual deployment target should be the same order of magnitude, not verified identical.
 
 ### `src/chat_parser.py`
 
@@ -415,7 +413,7 @@ spacy             # NOT tokenizer-only — fastcoref's resolve_text needs a real
 groq          # removed — no LLM generation step
 instructor    # removed — no structured LLM outputs
 python-dotenv # removed — no API keys required anywhere
-sentence-transformers # not added — fastembed already bakes in the same MiniLM model without PyTorch
+sentence-transformers # not added — fastembed already provides the same MiniLM model without PyTorch
 ```
 
 ---
@@ -476,7 +474,6 @@ No environment variables or API keys are required for the core pipeline (file in
 | `CONVERSATION_LINKING_KEYWORDS_PER_MESSAGE` | `5` | Per-message YAKE keyword count |
 | `CONVERSATION_LINKING_COREF_ENABLED` | `false` | Optional Tier 2 coreference resolution (needs `requirements-coref.txt`) |
 | `CONVERSATION_LINKING_COREF_WINDOW_MESSAGES` | `20` | Coref resolution chunk size |
-| `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE` | `1` (set in the Dockerfile) | Stop fastembed/transformers from any runtime network call once models are baked in |
 
 Full definitions: `LinkerConfig.from_env()` in `src/conversation_linker.py`.
 
@@ -484,17 +481,13 @@ Full definitions: `LinkerConfig.from_env()` in `src/conversation_linker.py`.
 
 ## Deployment
 
-The app ships as a single Docker image (root `Dockerfile`, multi-stage): a Node stage builds the Vite frontend, and a `python:3.12-slim` runtime stage runs the FastAPI backend, which mounts the built `frontend/dist` as static files (`api/main.py`) — one process, one port, no separate frontend host or CORS config needed. **Build-verified**: `docker build .` → 1.29GB, container starts, `/health` returns 200, a real `/analyse` call succeeds end to end.
+The web app deploys to Vercel as a static site (see `vercel.json` and Browser build below). The FastAPI service, which the REST API and MCP server depend on, runs locally only. It mounts `frontend/dist` as static files if a build exists (`api/main.py`), but without the COOP/COEP headers, so embedding stays on 1 thread there.
 
-The `sentence-transformers/all-MiniLM-L6-v2` ONNX model is baked into the image at build time (`fastembed`'s default cache path, `/tmp/fastembed_cache`, resolved identically at build and run time since `llm_service.py` never overrides `cache_dir`), so the container needs no network access at runtime — cold starts don't re-download the model. `libgomp1` is installed explicitly since `onnxruntime` needs it and `python:slim` doesn't ship it.
+`fastembed` downloads the `sentence-transformers/all-MiniLM-L6-v2` ONNX model to its default cache path on first use.
 
-**Host**: Hugging Face Spaces, Docker SDK, 16GB RAM / 2 vCPU hardware tier.
+**Memory profiling finding** (see git history around `src/llm_service.py` for the fix): embedding an entire chat's messages in one `fastembed.embed()` call caused peak RSS to scale with message count and never release — independent of thread count or the ONNX Runtime CPU memory arena setting (both were profiled and ruled out as the cause). A 3,000-message chat could peak over 2GB on embeddings alone, dwarfing the graph-building cost. Fixed by chunking `generate_embeddings()` into batches of 32 with `gc.collect()` between chunks — cut peak RSS by roughly 70% (3,000-message chat: ~2.1GB → ~560MB, isolated embedding-only measurement). This fix applies to the FastAPI service, not the browser build.
 
-**Optional `runtime-coref` build stage**: adds Tier 2 coreference resolution (`docker build --target runtime-coref`), never built by default. Two real bugs were caught building this for the first time, both fixed: (1) appending a stage after `runtime` in the same Dockerfile makes Docker build it *by default* when no `--target` is given (last stage in the file = default target) — worked around with a trailing `FROM runtime AS default` stage so plain `docker build .` stays on the lightweight path; (2) `requirements-coref.txt` needs `--extra-index-url https://download.pytorch.org/whl/cpu` + a pinned `torch==...+cpu`, or `pip install fastcoref` silently resolves the full CUDA-enabled torch build (12.2GB image observed vs. ~1.5GB expected). See `docs/conversation-linking-remaining-work.md` for what's still unverified about this stage (a fresh build since the CPU pin, real-network-disabled cold start, coref-enabled eval numbers).
-
-**Memory profiling finding** (see git history around `src/llm_service.py` for the fix): embedding an entire chat's messages in one `fastembed.embed()` call caused peak RSS to scale with message count and never release — independent of thread count or the ONNX Runtime CPU memory arena setting (both were profiled and ruled out as the cause). A 3,000-message chat could peak over 2GB on embeddings alone, dwarfing the graph-building cost. Fixed by chunking `generate_embeddings()` into batches of 32 with `gc.collect()` between chunks — cut peak RSS by roughly 70% (3,000-message chat: ~2.1GB → ~560MB, isolated embedding-only measurement). At the 16GB/2vCPU tier this is ample headroom either way, but the fix is what makes the app viable on much smaller hosts too, if ever moved off Spaces.
-
-**Still true regardless of host RAM**: the single-instance constraint from the in-memory `AnalysisStore` (see Known Limitations) — don't enable autoscaling/multiple replicas without moving analysis storage out of process memory first.
+**Still true for the FastAPI service**: the single-instance constraint from the in-memory `AnalysisStore` (see Known Limitations) — don't enable autoscaling/multiple replicas without moving analysis storage out of process memory first.
 
 ## Browser build
 
