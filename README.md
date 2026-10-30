@@ -72,24 +72,19 @@ just stop
 
 The project now includes a high-performance React dashboard powered by Vite.
 
+The web app runs the whole pipeline in the visitor's browser, in a Web Worker: Pyodide executes `Phase2/src`, and `transformers.js` computes embeddings with the quantised `Xenova/all-MiniLM-L6-v2` model. Chat exports are never uploaded. Embedding uses up to 4 threads when the page is cross-origin isolated, and falls back to 1 thread otherwise.
+
 ### Development Setup
 
-1. **Frontend**:
-   ```bash
-   cd Phase2/frontend
-   npm install
-   npm run dev
-   ```
-2. **Backend**:
-   ```bash
-   # In a separate terminal, from the repo root
-   export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2
-   uv run uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-   ```
+```bash
+cd Phase2/frontend
+npm install
+npm run dev
+```
+
+The web app doesn't need the backend. FastAPI is only needed for the REST API and the MCP server.
 
 ### Production Build
-
-The backend is configured to serve the built frontend from `Phase2/frontend/dist`. To rebuild:
 
 ```bash
 cd Phase2/frontend
@@ -98,21 +93,28 @@ npm run build
 
 ## Deployment
 
-The root `Dockerfile` builds and serves the whole app as a single container: a Node stage builds the React frontend, and a Python stage runs the FastAPI backend, which serves that build directly (`Phase2/frontend/dist`) alongside the API — one image, one port, nothing else to host separately. The embedding model is baked into the image at build time, so the container needs no network access at startup.
+### Web app (Vercel)
+
+Import the repo into Vercel and leave the root directory as the repo root. `vercel.json` builds `Phase2/frontend` as a static site and sets the COOP/COEP headers that multi-threading needs. Pyodide and the model load from public CDNs, so they don't use the site's own bandwidth.
+
+### FastAPI service (local)
+
+The REST API and MCP server run locally with `uv`:
 
 ```bash
-docker build -t social-network-rag .
-docker run -p 8000:8000 social-network-rag
+just install
+just api
 ```
 
-This builds and runs the default image (~1.3GB, build-verified) — Tier 1 of the conversation-linking layer only, no optional Tier 2 extras. Tier 2 coreference resolution lives in a separate, opt-in build stage that a plain `docker build .` never reaches:
+Because `api/store.py`'s analysis store lives in process memory with no shared backing store, the service must run as a single instance — see [docs/context.md](docs/context.md#deployment) for the full rationale and the memory-profiling notes behind the current embedding-batch-size choice in `src/llm_service.py`.
+
+Tier 2 coreference resolution is optional, and only affects the local service:
 
 ```bash
-docker build --target runtime-coref -t social-network-rag:coref .
-docker run -p 8000:8000 -e CONVERSATION_LINKING_COREF_ENABLED=true social-network-rag:coref
+uv pip install -r Phase2/requirements-coref.txt
+uv run python -m spacy download en_core_web_sm
+export CONVERSATION_LINKING_COREF_ENABLED=true
 ```
-
-Hosted on **Hugging Face Spaces** (Docker SDK, 16GB RAM / 2 vCPU). Because `api/store.py`'s analysis store lives in process memory with no shared backing store, the service must run as a single instance — see [docs/context.md](docs/context.md#deployment) for the full rationale and the memory-profiling notes behind the current embedding-batch-size choice in `src/llm_service.py`.
 
 ## Testing on Linux
 

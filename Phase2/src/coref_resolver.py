@@ -7,10 +7,9 @@ short, pronoun-heavy reply ("yeah I agree with that", "she's right") has
 almost none. This is the gap the semantic signal in
 src/conversation_linker.py can't help with on its own.
 
-Deliberately NOT part of the default installation or Docker image.
+Deliberately NOT part of the default installation.
 fastcoref pulls in torch + transformers (CPU wheels, but still real weight)
-— see Phase2/requirements-coref.txt and the Dockerfile's optional
-`runtime-coref` build stage. Every function here degrades to a no-op
+— see Phase2/requirements-coref.txt. Every function here degrades to a no-op
 (original text, unchanged) if the optional dependency isn't installed or
 fails to load, so importing this module — or calling it with
 CONVERSATION_LINKING_COREF_ENABLED unset — never requires fastcoref to be

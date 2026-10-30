@@ -7,6 +7,7 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { UploadCloud, Network, Search, FolderOpen, X, Users, Zap, MessageSquare, ShieldCheck, ChevronDown } from 'lucide-react';
 import NetworkBackground from './NetworkBackground';
 import CodeExample from './CodeExample';
+import { analyseFile, searchMessages, setTopicCountInWorker } from './pipeline/client';
 import './App.css';
 
 const CAPABILITIES = [
@@ -38,7 +39,7 @@ const CAPABILITIES = [
   {
     icon: ShieldCheck,
     title: 'Runs Locally',
-    desc: 'No external LLM calls for core analysis — your export never leaves the machine to be understood.'
+    desc: 'No external LLM calls for core analysis — your export never leaves your device.'
   }
 ];
 
@@ -78,8 +79,6 @@ const communityColor = (communityId) => {
   return COMMUNITY_PALETTE[communityId % COMMUNITY_PALETTE.length];
 };
 
-const API_BASE_URL = ''; // Proxied via Vite in dev, same origin in prod
-
 // Node IDs are prefixed by type on the backend (social_graph_builder.py):
 // person -> `p_{sender}`, message -> `m_{message_id}`. Topic and chat nodes
 // use their raw string as-is. Build/parse IDs through these helpers rather
@@ -103,7 +102,7 @@ const formatGraphData = (graphDataRaw) => ({
   links: graphDataRaw.edges.map(e => {
     // Backend stores REPLIED_TO as reply -> original (newer message
     // pointing at the one it replies to), which is what the reply
-    // thread/stats calculations need server-side. Flip it here so the
+    // thread/stats calculations need during analysis. Flip it here so the
     // rendered arrow points forward in conversation order (original
     // -> reply) instead of backward.
     const isReply = e.relationship === 'REPLIED_TO';
@@ -126,6 +125,7 @@ function App() {
   const [analysisId, setAnalysisId] = useState(null);
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState('');
   const [selectedNode, setSelectedNode] = useState(null);
   const [query, setQuery] = useState('');
   const [queryResults, setQueryResults] = useState([]);
@@ -155,7 +155,7 @@ function App() {
   }, [graphData]);
 
   // Inferred connections (_infer_lexical_continuity) never affect influence
-  // scores server-side, but they can still visually suggest a relationship
+  // scores during analysis, but they can still visually suggest a relationship
   // that isn't confirmed — this lets a viewer drop them from the picture
   // entirely rather than just dimming them.
   const visibleGraphData = useMemo(() => ({
@@ -237,27 +237,13 @@ function App() {
     }
 
     setLoading(true);
-    const formData = new FormData();
-    formData.append('file', file);
+    setLoadingStatus('Starting…');
 
     try {
-      const res = await fetch(`${API_BASE_URL}/analyse`, {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Analysis failed' }));
-        throw new Error(err.detail || 'Analysis failed');
-      }
-      
-      const data = await res.json();
+      const data = await analyseFile(file, setLoadingStatus);
       setAnalysisId(data.id);
       setTopicCount(MIN_TOPIC_COUNT);
-
-      const graphRes = await fetch(`${API_BASE_URL}/graph/${data.id}/data`);
-      const graphDataRaw = await graphRes.json();
-      setGraphData(formatGraphData(graphDataRaw));
+      setGraphData(formatGraphData(data.graph));
     } catch (err) {
       alert("Upload Error:\n\n" + err.message);
     } finally {
@@ -271,13 +257,7 @@ function App() {
 
     setTopicCountLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/graph/${analysisId}/topics`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ top_n: nextCount })
-      });
-      if (!res.ok) throw new Error("Failed to update topic count");
-      const graphDataRaw = await res.json();
+      const graphDataRaw = await setTopicCountInWorker(nextCount);
       setGraphData(formatGraphData(graphDataRaw));
       // The selected topic node may no longer exist post-regeneration.
       setSelectedNode(sel => (sel && sel.type === 'topic') ? null : sel);
@@ -311,14 +291,7 @@ function App() {
     if (!analysisId || !query.trim()) return;
     setQueryLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/graph/${analysisId}/query`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim(), top_k: 8 })
-      });
-      
-      if (!res.ok) throw new Error("Search failed");
-      const data = await res.json();
+      const data = await searchMessages(query.trim(), 8);
       setQueryResults(data.results || []);
     } catch (err) {
       alert("Search failed: " + err.message);
@@ -395,7 +368,7 @@ function App() {
                 {loading ? (
                   <div className="loading-state">
                     <div className="spinner"></div>
-                    <p>Analyzing Chat Data...</p>
+                    <p>{loadingStatus}</p>
                   </div>
                 ) : (
                   <>
@@ -433,7 +406,10 @@ function App() {
             <section className="landing-section">
               <h3 className="landing-section-title">How it works under the hood</h3>
               <p className="landing-section-lead">
-                The drop zone above talks to a plain REST API — the same two calls
+                The drop zone above runs entirely in your browser: Python compiled to
+                WebAssembly builds the graph and a quantised model embeds your messages,
+                so your export is never uploaded. Running the FastAPI service locally
+                exposes the same analysis as a plain REST API — the same two calls
                 you'd make from your own code:
               </p>
               <CodeExample />
