@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 from pyvis.network import Network
 from src.social_models import Message
-from src.llm_service import LLMService
+from src.llm_service import retrieval_service
 from typing import List, Dict, Any
 import asyncio
 from datetime import datetime, timedelta
@@ -46,7 +46,7 @@ class SocialGraphBuilder:
 
     def __init__(self):
         self.graph = nx.DiGraph() # Directed graph for detailed interactions
-        self.llm = LLMService()
+        self.llm = retrieval_service
         self.messages: List[Message] = []
         self.chat_name: str = ""
 
