@@ -26,13 +26,23 @@ const onnxThreadCount = () => (
     : 1
 );
 
+const RUNTIME_STEPS = 4;
+
 const loadRuntime = async (report) => {
+  // Pyodide doesn't report bytes the way the model download does, so this
+  // bar moves as each part finishes.
+  const reportRuntime = (step) => report({ runtime: { fraction: step / RUNTIME_STEPS, step, total: RUNTIME_STEPS } });
+
   report({ status: 'Loading Python runtime…' });
+  reportRuntime(0);
   const { loadPyodide } = await import(/* @vite-ignore */ PYODIDE_URL);
   const pyodide = await loadPyodide();
+  reportRuntime(1);
   await pyodide.loadPackage(PYODIDE_PACKAGES, { messageCallback: () => {} });
+  reportRuntime(2);
   const micropip = pyodide.pyimport('micropip');
   await micropip.install.callKwargs(pyodide.toPy(PYPI_PACKAGES), { deps: false });
+  reportRuntime(3);
 
   pyodide.FS.mkdirTree('/app/src');
   for (const [path, source] of Object.entries(pythonSources)) {
@@ -40,6 +50,7 @@ const loadRuntime = async (report) => {
   }
   pyodide.runPython("import sys; sys.path.insert(0, '/app')");
   const entry = pyodide.pyimport('src.browser_entry');
+  reportRuntime(RUNTIME_STEPS);
 
   report({ status: 'Loading embedding model…' });
   const { pipeline, env } = await import(/* @vite-ignore */ TRANSFORMERS_URL);
@@ -88,8 +99,8 @@ const handlers = {
   async analyse({ file }, report) {
     const { pyodide, entry, embed } = await getRuntime(report);
     // Also covers a second upload and a browser-cached model, neither of
-    // which report any download.
-    report({ model: { fraction: 1 } });
+    // which report any progress.
+    report({ runtime: { fraction: 1 }, model: { fraction: 1 } });
 
     report({ status: 'Parsing chat…' });
     const uploadPath = `/tmp/${file.name.replace(/[^\w.-]/g, '_')}`;

@@ -148,11 +148,25 @@
 .progress-labels { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); }
 .progress-detail { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .progress-track {
+  position: relative;
   height: 8px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 999px;
 }
+/* Shows the current stage is still working while its bar waits for the next step. */
+.progress-track.is-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  transform: translateX(-100%);
+  animation: progress-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes progress-shimmer {
+  to { transform: translateX(100%); }
+}
+
 .progress-fill {
   display: block;
   height: 100%;

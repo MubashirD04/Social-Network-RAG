@@ -25,7 +25,7 @@ const nodeId = {
   message: (messageId) => `m_${messageId}`,
 };
 
-const EMPTY_PROGRESS = { status: 'Starting…', model: null, embedding: null };
+const EMPTY_PROGRESS = { status: 'Starting…', runtime: null, model: null, embedding: null };
 
 const MIN_TOPIC_COUNT = 5;
 const MAX_TOPIC_COUNT = 10;
