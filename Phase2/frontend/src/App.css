@@ -394,7 +394,7 @@
   color: #000;
   font-weight: 600;
 }
-.view-toggle button:disabled { opacity: 0.5; cursor: not-allowed; }
+.view-toggle button[aria-disabled="true"] { opacity: 0.5; }
 
 .connection-summary {
   margin-top: 12px;
@@ -434,7 +434,8 @@ button:focus-visible, input:focus-visible {
   .branding-name, .new-chat-label { display: none; }
   .new-chat-btn { padding: 6px; border: none; }
   .right-rail { left: 8px; right: 8px; top: 72px; bottom: 8px; width: auto; }
-  .details-sidebar { max-height: 45%; margin-top: auto; }
+  .right-rail { justify-content: flex-end; }
+  .details-sidebar { max-height: 45%; }
   .legend-panel { margin-top: 0; }
   .results-panel {
     left: 8px;
@@ -479,6 +480,7 @@ button:focus-visible, input:focus-visible {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  width: max-content;
   max-width: min(90vw, 480px);
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-sm);
@@ -493,4 +495,24 @@ button:focus-visible, input:focus-visible {
 .node-list { min-height: 0; overflow-y: auto; }
 
 /* A selected node is what someone came to read, so the legend gives way. */
-.right-rail:has(.details-sidebar) .legend-panel { max-height: 40%; }
+.right-rail:has(.details-sidebar:not(.is-collapsed)) .legend-panel { max-height: 40%; }
+
+/* --- Collapsible details card --- */
+.panel-header h2 { min-width: 0; overflow-wrap: anywhere; }
+.panel-actions { display: flex; flex-shrink: 0; align-items: center; gap: var(--space-2); }
+.panel-toggle:hover { color: var(--text-main); }
+.panel-toggle svg { display: block; transition: transform 0.3s ease; }
+.panel-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.panel-collapse { margin-top: 0; }
+.details-sidebar .panel-header { transition: margin-bottom 0.3s ease; }
+.details-sidebar.is-collapsed { min-height: 0; padding-block: var(--space-3); }
+.details-sidebar.is-collapsed .panel-header { margin-bottom: 0; }
+
+/* --- Notice for 3D being unavailable: sits clear of the panels at the bottom --- */
+.toast-notice {
+  top: 92px;
+  bottom: auto;
+  background: var(--surface-solid);
+  border-color: var(--accent-teal);
+}
+.toast-icon { flex-shrink: 0; color: var(--accent-teal); }

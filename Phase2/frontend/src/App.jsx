@@ -4,7 +4,7 @@
 // client) and is not meant to be embedded here.
 import React, { lazy, Suspense, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react';
-import { Network, Search, Upload, X, ChevronDown, List } from 'lucide-react';
+import { Network, Search, Upload, X, ChevronDown, Info, List } from 'lucide-react';
 import Landing from './landing/Landing';
 import NodeBrowser from './NodeBrowser';
 import { analyseFile, searchMessages, setTopicCountInWorker } from './pipeline/client';
@@ -50,10 +50,15 @@ const supportsWebGL = () => {
   }
 };
 
-const reasonNo3D = (width, visibleNodeCount) => {
-  if (width < MIN_3D_WIDTH || window.matchMedia('(pointer: coarse)').matches) return '3D is available on desktop only';
-  if (!supportsWebGL()) return '3D needs WebGL, which this browser doesn\'t provide';
-  if (visibleNodeCount > MAX_3D_NODES) return `3D supports up to ${MAX_3D_NODES} visible nodes`;
+const reasonNo3D = (width, visibleNodeCount, showAllMessages) => {
+  if (width < MIN_3D_WIDTH || window.matchMedia('(pointer: coarse)').matches) {
+    return '3D isn\'t available on phones and tablets. Open this page on a desktop browser to use it.';
+  }
+  if (!supportsWebGL()) return '3D needs WebGL, which this browser doesn\'t provide. Everything is still available in 2D.';
+  if (visibleNodeCount > MAX_3D_NODES) {
+    const fix = showAllMessages ? 'Turn off "Show every message"' : 'Hide some expanded messages';
+    return `3D can show up to ${MAX_3D_NODES.toLocaleString()} nodes, and this view has ${visibleNodeCount.toLocaleString()}. ${fix} to use it.`;
+  }
   return null;
 };
 
@@ -77,6 +82,7 @@ function App() {
   const [showAllMessages, setShowAllMessages] = useState(false);
   const [expandedIds, setExpandedIds] = useState(() => new Set());
   const [wants3D, setWants3D] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const [browserOpen, setBrowserOpen] = useState(false);
 
   // The graph view relies on fixed-position panels that never overflow the
@@ -129,7 +135,7 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const no3DReason = reasonNo3D(windowSize.width, visibleGraphData.nodes.length);
+  const no3DReason = reasonNo3D(windowSize.width, visibleGraphData.nodes.length, showAllMessages);
   const is3D = wants3D && !no3DReason;
 
   // Runs after the render that adds any newly expanded nodes.
@@ -257,6 +263,18 @@ function App() {
             )}
           </Suspense>
 
+          {/* Also covers being in 3D when the view outgrows it. Asking for 3D is
+              remembered, so it comes back as soon as the reason goes away. */}
+          <AnimatePresence>
+            {wants3D && no3DReason && (
+              <Motion.div key="no-3d" {...PANEL_MOTION} className="toast toast-notice" role="status">
+                <Info size={18} className="toast-icon" aria-hidden="true" />
+                <span>{no3DReason}</span>
+                <button type="button" className="close-btn" aria-label="Dismiss" onClick={() => setWants3D(false)}><X size={18} /></button>
+              </Motion.div>
+            )}
+          </AnimatePresence>
+
           <AnimatePresence>
             {error && (
               <Motion.div key="error" {...PANEL_MOTION} className="toast" role="alert">
@@ -290,7 +308,7 @@ function App() {
             </form>
             <div className="view-toggle" role="group" aria-label="Graph view">
               <button type="button" aria-pressed={!is3D} onClick={() => setWants3D(false)}>2D</button>
-              <button type="button" aria-pressed={is3D} disabled={!!no3DReason} title={no3DReason || 'Show the graph in 3D'} onClick={() => setWants3D(true)}>3D</button>
+              <button type="button" aria-pressed={is3D} aria-disabled={!!no3DReason} title={no3DReason || 'Show the graph in 3D'} onClick={() => setWants3D(true)}>3D</button>
             </div>
             <button type="button" className="icon-btn" title="Browse nodes" aria-label="Browse nodes" aria-expanded={browserOpen} onClick={() => setBrowserOpen(o => !o)}>
               <List size={20} />
@@ -366,11 +384,25 @@ function App() {
           <div className="right-rail">
           <AnimatePresence>
             {selectedNode && (
-              <Motion.div key="details" {...PANEL_MOTION} className="details-sidebar glass-panel overlay-panel">
+              <Motion.div key="details" {...PANEL_MOTION} className={`details-sidebar glass-panel overlay-panel ${detailsOpen ? '' : 'is-collapsed'}`}>
                 <div className="panel-header">
                   <h2>{selectedNode.label || selectedNode.id}</h2>
-                  <button type="button" className="close-btn" aria-label="Close details" onClick={clearSelection}><X size={20} /></button>
+                  <div className="panel-actions">
+                    <button
+                      type="button"
+                      className="close-btn panel-toggle"
+                      aria-label={detailsOpen ? 'Collapse details' : 'Expand details'}
+                      title={detailsOpen ? 'Collapse details' : 'Expand details'}
+                      aria-expanded={detailsOpen}
+                      onClick={() => setDetailsOpen(o => !o)}
+                    >
+                      <ChevronDown size={20} aria-hidden="true" />
+                    </button>
+                    <button type="button" className="close-btn" aria-label="Close details" title="Close details" onClick={clearSelection}><X size={20} /></button>
+                  </div>
                 </div>
+                <div className={`legend-collapse panel-collapse ${detailsOpen ? '' : 'collapsed'}`} inert={!detailsOpen}>
+                  <div className="legend-collapse-inner">
                 <div className="badge-container">
                   {selectedNode.type === 'person' ? (
                     <>
@@ -438,6 +470,8 @@ function App() {
                   {connections.confirmed} confirmed connection{connections.confirmed === 1 ? '' : 's'}, {connections.inferred} inferred
                   {!showAllMessages && (selectedNode.type === 'person' || selectedNode.type === 'topic') && <><br />The graph adds up to {EXPAND_LIMIT} of the latest related messages.</>}
                 </p>
+                  </div>
+                </div>
               </Motion.div>
             )}
           </AnimatePresence>
