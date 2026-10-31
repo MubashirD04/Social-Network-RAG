@@ -46,8 +46,8 @@ Social-Network-RAG/
 │   │   │   ├── index.css
 │   │   │   ├── main.jsx
 │   │   │   ├── NodeBrowser.jsx       # Searchable non-spatial list of all nodes
-│   │   │   ├── NetworkBackground.jsx # Landing-page animated background
 │   │   │   ├── CodeExample.jsx       # Landing-page code snippet display
+│   │   │   ├── landing/              # Landing page, its lazy three.js node field, Lenis + Motion scroll
 │   │   │   ├── pipeline/             # Pyodide + transformers.js worker and its client
 │   │   │   └── graph/
 │   │   │       ├── graphData.js      # Payload formatting, overview/expansion, highlight, position-keeping

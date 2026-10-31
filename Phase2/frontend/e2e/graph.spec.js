@@ -92,3 +92,84 @@ test('3D waits for the toggle before downloading three.js, and respects limits',
   await page.getByRole('checkbox', { name: 'Show every message' }).check();
   await expect(page.getByRole('button', { name: '3D', exact: true })).toBeDisabled();
 });
+
+test.describe('landing page', () => {
+  test('renders the interactive field and smooth scrolling', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('canvas.node-field')).toBeVisible();
+    await expect(page.locator('html.lenis')).toHaveCount(1);
+    await expect.poll(() => page.locator('.landing').evaluate(el => el.style.getPropertyValue('--flow'))).not.toBe('');
+  });
+
+  test('anchor link scrolls and shifts the accent color', async ({ page }) => {
+    await page.goto('/');
+    const before = await page.locator('.brand').evaluate(el => getComputedStyle(el).color);
+    await page.getByRole('link', { name: 'How it works' }).click();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(200);
+    await expect.poll(() => page.locator('.brand').evaluate(el => getComputedStyle(el).color)).not.toBe(before);
+  });
+
+  test('reduced motion turns off smooth scrolling', async ({ browser }) => {
+    const context = await browser.newContext({ reducedMotion: 'reduce', baseURL: 'http://localhost:4173' });
+    const page = await context.newPage();
+    await page.goto('/');
+    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.locator('html.lenis')).toHaveCount(0);
+    await context.close();
+  });
+
+  test('an unsupported file shows an inline error', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('input[type="file"]').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from('x') });
+    await expect(page.getByRole('alert')).toContainText("photo.png isn't a supported export");
+  });
+
+  test('the drop zone is reachable by keyboard', async ({ page }) => {
+    await page.goto('/');
+    const target = page.getByRole('button', { name: /Drop a chat export/ });
+    await target.focus();
+    await expect(target).toBeFocused();
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.keyboard.press('Enter')]);
+    expect(chooser.isMultiple()).toBe(false);
+  });
+
+  test('shows separate live bars for the model and embeddings', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.Worker = class {
+        postMessage({ id }) {
+          const send = (delay, progress) => setTimeout(() => this.onmessage({ data: { id, progress } }), delay);
+          send(0, { status: 'Loading embedding model…', model: { fraction: 0.5, loaded: 11e6, total: 22e6 } });
+          send(600, { model: { fraction: 1 } });
+          send(600, { status: 'Embedding messages…', embedding: { fraction: 0.25, done: 32, total: 128 } });
+        }
+      };
+    });
+    await page.goto('/');
+    await page.locator('input[type="file"]').setInputFiles({ name: 'chat.txt', mimeType: 'text/plain', buffer: Buffer.from('x') });
+
+    const model = page.getByRole('progressbar', { name: 'Embedding model' });
+    const embedding = page.getByRole('progressbar', { name: 'Message embeddings' });
+    await expect(model).toHaveAttribute('aria-valuenow', '50');
+    await expect(page.getByText('11 / 22 MB')).toBeVisible();
+    await expect(embedding).toHaveAttribute('aria-valuenow', '0');
+
+    await expect(model).toHaveAttribute('aria-valuenow', '100');
+    await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+    await expect(embedding).toHaveAttribute('aria-valuenow', '25');
+    await expect(page.getByText('32 / 128')).toBeVisible();
+  });
+
+  test('has no glass effects', async ({ page }) => {
+    await page.goto('/');
+    const blurred = await page.locator('.landing, .landing *').evaluateAll(els => (
+      els.filter(el => getComputedStyle(el).backdropFilter !== 'none').length
+    ));
+    expect(blurred).toBe(0);
+  });
+
+  test('has no horizontal overflow at phone width', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.goto('/');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+});

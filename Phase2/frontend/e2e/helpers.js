@@ -47,7 +47,7 @@ export const useFakePipeline = async (page, graph, results = []) => {
 
 export const uploadFixture = async (page) => {
   await page.locator('input[type="file"]').setInputFiles({ name: 'chat.txt', mimeType: 'text/plain', buffer: Buffer.from('x') });
-  await expect(page.locator('canvas').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Browse nodes' })).toBeVisible();
 };
 
 export const openBrowser = (page) => page.getByRole('button', { name: 'Browse nodes' }).click();

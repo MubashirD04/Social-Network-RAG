@@ -1,0 +1,274 @@
+.landing {
+  position: relative;
+  min-height: 100vh;
+  background: var(--bg-dark);
+  --flow: var(--accent-teal);
+}
+
+.landing-glow, .node-field-wrap, .node-field {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.landing-glow {
+  background:
+    radial-gradient(60vmax 45vmax at 80% 10%, color-mix(in srgb, var(--flow) 16%, transparent), transparent),
+    radial-gradient(50vmax 40vmax at 10% 90%, color-mix(in srgb, var(--flow) 9%, transparent), transparent);
+}
+
+.landing-main {
+  position: relative;
+  width: min(100% - 2 * var(--gutter), 720px);
+  margin-inline: auto;
+}
+
+/* Text sits directly over the moving field, so a soft halo keeps it readable
+   without boxing every paragraph into a card. */
+.landing-main h1, .landing-main h2, .landing-main h3,
+.lede, .section-lead, .privacy p, .step p {
+  text-shadow: 0 0 18px var(--bg-dark), 0 0 6px var(--bg-dark);
+}
+
+.landing h2 {
+  font-size: var(--text-2xl);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+/* Text runs down the middle, so the field stays quiet there and at full
+   strength in the margins. With no margins, it stays quiet everywhere. */
+.node-field {
+  --field-mask: linear-gradient(to right, #000 0, rgba(0, 0, 0, 0.4) calc(50% - 300px), rgba(0, 0, 0, 0.4) calc(50% + 300px), #000 100%);
+  -webkit-mask-image: var(--field-mask);
+  mask-image: var(--field-mask);
+}
+@media (max-width: 900px) {
+  .node-field { --field-mask: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)); }
+}
+
+/* --- Hero --- */
+.hero {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding-block: var(--space-7) var(--space-5);
+  text-align: center;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  color: var(--flow);
+}
+
+.hero h1 {
+  font-size: var(--text-3xl);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+.lede {
+  max-width: 56ch;
+  font-size: var(--text-lg);
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+
+.drop-zone { width: min(100%, 560px); margin-top: var(--space-3); }
+
+.drop-target {
+  width: 100%;
+  min-height: 168px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  color: var(--text-main);
+  font: inherit;
+  background: var(--surface-solid);
+  border: 1.5px dashed color-mix(in srgb, var(--flow) 60%, transparent);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, transform 0.2s;
+}
+.drop-target svg { color: var(--flow); }
+.drop-target:hover:not(.drop-progress), .is-dragging .drop-target {
+  background: color-mix(in srgb, var(--flow) 12%, var(--surface-solid));
+  border-color: var(--flow);
+}
+.is-dragging .drop-target { transform: scale(1.015); border-style: solid; }
+.drop-progress {
+  align-items: stretch;
+  gap: var(--space-4);
+  border-style: solid;
+  cursor: progress;
+}
+
+.drop-title { font-size: var(--text-lg); font-weight: 600; }
+.drop-hint, .drop-note { font-size: var(--text-sm); color: var(--text-muted); }
+.drop-note { text-shadow: 0 0 10px var(--bg-dark); }
+.drop-status { font-weight: 600; text-align: center; }
+
+.progress-row { display: flex; flex-direction: column; gap: var(--space-1); text-align: left; }
+.progress-labels { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); }
+.progress-detail { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.progress-track {
+  height: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+.progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--flow);
+  border-radius: inherit;
+  transform-origin: left;
+}
+
+.drop-error {
+  width: min(100%, 560px);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: #ffc9c9;
+  background: rgba(255, 107, 107, 0.14);
+  border: 1px solid rgba(255, 107, 107, 0.5);
+  border-radius: var(--radius-sm);
+}
+
+.scroll-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-4);
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-soft);
+  text-decoration: none;
+}
+.scroll-cue:hover { color: var(--flow); }
+
+/* --- Sections --- */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-block: var(--space-8);
+  scroll-margin-top: var(--space-4);
+}
+.section-lead { margin-top: var(--space-2); color: var(--text-soft); line-height: 1.6; }
+
+/* --- Steps: a line that fills as you scroll through them --- */
+.steps {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  list-style: none;
+}
+.steps::before, .steps-progress {
+  content: '';
+  position: absolute;
+  left: 19px;
+  top: 20px;
+  bottom: 20px;
+  width: 2px;
+}
+.steps::before, .steps-progress {
+  -webkit-mask-image: linear-gradient(#000 75%, transparent);
+  mask-image: linear-gradient(#000 75%, transparent);
+}
+.steps::before { background: var(--glass-border); }
+.steps-progress { display: block; background: var(--flow); transform-origin: top; }
+
+.step { position: relative; display: grid; grid-template-columns: 40px 1fr; gap: var(--space-4); }
+.step-marker {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  font-weight: 700;
+  color: var(--flow);
+  background: var(--bg-dark);
+  border: 2px solid var(--flow);
+  border-radius: 50%;
+}
+.step h3 { font-size: var(--text-lg); font-weight: 600; margin-bottom: var(--space-1); }
+.step p { color: var(--text-soft); line-height: 1.6; }
+
+/* --- Questions: rules rather than cards, so they read as one list --- */
+.questions { display: flex; flex-direction: column; }
+.question {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: var(--space-1) var(--space-5);
+  padding-block: var(--space-4);
+  border-top: 1px solid var(--glass-border);
+}
+.question:last-child { border-bottom: 1px solid var(--glass-border); }
+.question dt { font-size: var(--text-lg); font-weight: 600; color: var(--flow); text-shadow: 0 0 12px var(--bg-dark); }
+.question dd { color: var(--text-soft); line-height: 1.6; text-shadow: 0 0 12px var(--bg-dark); }
+
+/* --- Privacy --- */
+.privacy { gap: var(--space-3); align-items: flex-start; }
+.privacy svg { color: var(--flow); }
+.privacy p { max-width: 60ch; font-size: var(--text-lg); line-height: 1.6; color: var(--text-soft); }
+
+/* --- Code --- */
+.code-window {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-solid);
+}
+.code-window-bar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--glass-border);
+}
+.code-window-title { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.code-window-body {
+  padding: var(--space-4);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+.code-line { white-space: pre; }
+.tok-k { color: var(--flow); }
+.tok-s { color: var(--accent-yellow); }
+.tok-c { color: var(--text-muted); font-style: italic; }
+.tok-p { color: var(--text-main); }
+
+/* --- Closing --- */
+.closing { align-items: center; text-align: center; padding-block-end: var(--space-9); }
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: var(--space-2) var(--space-5);
+  font-weight: 600;
+  color: #0f1115;
+  text-decoration: none;
+  background: var(--flow);
+  border-radius: 999px;
+  transition: transform 0.2s;
+}
+.cta:hover { transform: translateY(-2px); }
+a:focus-visible { outline: 2px solid var(--accent-yellow); outline-offset: 2px; border-radius: 4px; }

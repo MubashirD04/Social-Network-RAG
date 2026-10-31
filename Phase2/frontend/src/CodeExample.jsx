@@ -25,9 +25,6 @@ function CodeExample() {
   return (
     <div className="code-window">
       <div className="code-window-bar">
-        <span className="code-dot" style={{ background: '#FF6B6B' }} />
-        <span className="code-dot" style={{ background: '#FFD93D' }} />
-        <span className="code-dot" style={{ background: '#4ECDC4' }} />
         <span className="code-window-title">example.js</span>
       </div>
       <pre className="code-window-body">

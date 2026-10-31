@@ -4,52 +4,18 @@
 // client) and is not meant to be embedded here.
 import React, { lazy, Suspense, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react';
-import { UploadCloud, Network, Search, FolderOpen, X, Users, Zap, MessageSquare, ShieldCheck, ChevronDown, List } from 'lucide-react';
-import NetworkBackground from './NetworkBackground';
-import CodeExample from './CodeExample';
+import { Network, Search, FolderOpen, X, ChevronDown, List } from 'lucide-react';
+import Landing from './landing/Landing';
 import NodeBrowser from './NodeBrowser';
 import { analyseFile, searchMessages, setTopicCountInWorker } from './pipeline/client';
 import { buildVisibleGraph, computeHighlight, connectionSummary, expansionFor, formatGraphData, messagesForTopic, EXPAND_LIMIT } from './graph/graphData';
-import { COLORS, COMMUNITY_PALETTE, communityColor } from './graph/graphStyle';
+import { COLORS, communityColor } from './graph/graphStyle';
 import './App.css';
 
 // Split out so visitors who only read the landing page don't download a
-// renderer, and only people who ask for 3D download three.js.
+// graph renderer, and only people who ask for 3D download its library.
 const Graph2D = lazy(() => import('./graph/Graph2D'));
 const Graph3D = lazy(() => import('./graph/Graph3D'));
-
-const CAPABILITIES = [
-  {
-    icon: Users,
-    title: 'Community Detection',
-    desc: 'Greedy modularity clustering surfaces the sub-groups hiding inside a big chat.'
-  },
-  {
-    icon: Zap,
-    title: 'Influencers & Brokers',
-    desc: 'PageRank and betweenness centrality find who drives the conversation and who bridges cliques.'
-  },
-  {
-    icon: Search,
-    title: 'Semantic Search (RAG)',
-    desc: 'Ask plain-English questions and get back the messages that actually answer them.'
-  },
-  {
-    icon: MessageSquare,
-    title: 'Topic Extraction',
-    desc: 'KeyBERT pulls out what people were really talking about, run entirely on-device.'
-  },
-  {
-    icon: Network,
-    title: 'Interactive Graph',
-    desc: 'Click any person, message, or topic to trace its connections through the whole network.'
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Runs Locally',
-    desc: 'No external LLM calls for core analysis — your export never leaves your device.'
-  }
-];
 
 // Node IDs are prefixed by type on the backend (social_graph_builder.py):
 // person -> `p_{sender}`, message -> `m_{message_id}`. Topic and chat nodes
@@ -58,6 +24,8 @@ const CAPABILITIES = [
 const nodeId = {
   message: (messageId) => `m_${messageId}`,
 };
+
+const EMPTY_PROGRESS = { status: 'Starting…', model: null, embedding: null };
 
 const MIN_TOPIC_COUNT = 5;
 const MAX_TOPIC_COUNT = 10;
@@ -95,13 +63,13 @@ function App() {
   const [analysisId, setAnalysisId] = useState(null);
   const [graphData, setGraphData] = useState({ nodes: [], links: [], topicLinks: [] });
   const [loading, setLoading] = useState(false);
-  const [loadingStatus, setLoadingStatus] = useState('');
+  const [progress, setProgress] = useState(EMPTY_PROGRESS);
   const [selectedId, setSelectedId] = useState(null);
   const [focusRequest, setFocusRequest] = useState(null);
   const [query, setQuery] = useState('');
   const [queryResults, setQueryResults] = useState([]);
   const [queryLoading, setQueryLoading] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
+  const [error, setError] = useState(null);
   const [legendOpen, setLegendOpen] = useState(() => window.innerWidth >= NARROW_LEGEND_WIDTH);
   const [topicCount, setTopicCount] = useState(MIN_TOPIC_COUNT);
   const [topicCountLoading, setTopicCountLoading] = useState(false);
@@ -152,7 +120,6 @@ function App() {
   );
 
   const graphRef = useRef();
-  const fileInputRef = useRef();
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   useEffect(() => {
@@ -189,20 +156,21 @@ function App() {
     
     const validExtensions = ['.txt', '.json', '.zip'];
     if (!validExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
-      alert("Invalid file format. Please upload a .txt, .json, or .zip file.");
+      setError(`${file.name} isn't a supported export. Choose a .txt, .json, or .zip file.`);
       return;
     }
 
+    setError(null);
     setLoading(true);
-    setLoadingStatus('Starting…');
+    setProgress(EMPTY_PROGRESS);
 
     try {
-      const data = await analyseFile(file, setLoadingStatus);
+      const data = await analyseFile(file, (update) => setProgress(prev => ({ ...prev, ...update })));
       setAnalysisId(data.id);
       setTopicCount(MIN_TOPIC_COUNT);
       setGraphData(formatGraphData(data.graph));
     } catch (err) {
-      alert("Upload Error:\n\n" + err.message);
+      setError(`Couldn't analyze that file: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -217,28 +185,9 @@ function App() {
       const graphDataRaw = await setTopicCountInWorker(nextCount);
       setGraphData(formatGraphData(graphDataRaw));
     } catch (err) {
-      alert("Couldn't update topics: " + err.message);
+      setError(`Couldn't update topics: ${err.message}`);
     } finally {
       setTopicCountLoading(false);
-    }
-  };
-
-  const onDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const onDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileUpload(e.dataTransfer.files[0]);
     }
   };
 
@@ -249,7 +198,7 @@ function App() {
       const data = await searchMessages(query.trim(), 8);
       setQueryResults(data.results || []);
     } catch (err) {
-      alert("Search failed: " + err.message);
+      setError(`Search failed: ${err.message}`);
     } finally {
       setQueryLoading(false);
     }
@@ -263,99 +212,19 @@ function App() {
     setSelectedId(null);
     setQuery('');
     setQueryResults([]);
-    setDragActive(false);
+    setError(null);
     setTopicCount(MIN_TOPIC_COUNT);
     setExpandedIds(new Set());
     setShowAllMessages(false);
     setBrowserOpen(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
   };
 
   return (
     <MotionConfig reducedMotion="user">
     <div className={`app-container ${!analysisId ? 'landing-mode' : ''} ${is3D ? 'view-3d' : ''}`}>
       {!analysisId && (
-        <div className="landing-page">
-          <NetworkBackground />
-
-          <div className="landing-content">
-            <header className="landing-hero">
-              <div className="brand-mark">
-                <Network size={22} />
-                <span>Social RAG</span>
-              </div>
-              <h1>Turn a chat export into a living social graph</h1>
-              <p className="landing-subtitle">
-                Drop a WhatsApp, Telegram, or Slack export below and see who talks to whom,
-                who holds the room, and what they're actually talking about — analyzed
-                entirely on your machine.
-              </p>
-            </header>
-
-            <div
-              className={`drop-zone ${dragActive ? 'drag-active' : ''}`}
-              onDragEnter={onDrag}
-              onDragLeave={onDrag}
-              onDragOver={onDrag}
-              onDrop={onDrop}
-              onClick={() => !loading && fileInputRef.current.click()}
-            >
-              <div className="drop-content">
-                {loading ? (
-                  <div className="loading-state" role="status">
-                    <div className="spinner"></div>
-                    <p>{loadingStatus}</p>
-                  </div>
-                ) : (
-                  <>
-                    <UploadCloud className="icon-large" />
-                    <h2>Drop Chat File Here</h2>
-                    <p>Upload WhatsApp (.txt), Telegram (.json), or Slack (.zip) exports</p>
-                    <div className="test-files-hint">
-                      Or click here to browse test data
-                    </div>
-                  </>
-                )}
-              </div>
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                onChange={(e) => handleFileUpload(e.target.files[0])}
-                accept=".txt,.json,.zip"
-              />
-            </div>
-
-            <section className="landing-section">
-              <h3 className="landing-section-title">What's possible</h3>
-              <div className="capability-grid">
-                {CAPABILITIES.map((cap) => (
-                  <div className="capability-card" key={cap.title}>
-                    <cap.icon className="capability-icon" size={20} />
-                    <h4>{cap.title}</h4>
-                    <p>{cap.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="landing-section">
-              <h3 className="landing-section-title">How it works under the hood</h3>
-              <p className="landing-section-lead">
-                The drop zone above runs entirely in your browser: Python compiled to
-                WebAssembly builds the graph and a quantised model embeds your messages,
-                so your export is never uploaded. Running the FastAPI service locally
-                exposes the same analysis as a plain REST API — the same two calls
-                you'd make from your own code:
-              </p>
-              <CodeExample />
-            </section>
-          </div>
-        </div>
+        <Landing loading={loading} progress={progress} error={error} onFile={handleFileUpload} />
       )}
-
 
       {analysisId && (
         <>
@@ -386,6 +255,15 @@ function App() {
               />
             )}
           </Suspense>
+
+          <AnimatePresence>
+            {error && (
+              <Motion.div key="error" {...PANEL_MOTION} className="toast" role="alert">
+                <span>{error}</span>
+                <button type="button" className="close-btn" aria-label="Dismiss" onClick={() => setError(null)}><X size={18} /></button>
+              </Motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="sr-only" role="status">
             {selectedNode ? `Selected ${describeNode(selectedNode)}` : ''}
@@ -480,14 +358,14 @@ function App() {
                 <div className="badge-container">
                   {selectedNode.type === 'person' ? (
                     <>
-                      <span className="badge" style={{background: communityColor(selectedNode.community), color: '#000'}}>
+                      <span className="badge badge-community" style={{background: communityColor(selectedNode.community)}}>
                         {selectedNode.community === -1 || selectedNode.community == null ? 'NO COMMUNITY' : `COMMUNITY ${selectedNode.community}`}
                       </span>
                       {selectedNode.is_influencer && <span className="badge influencer">INFLUENCER</span>}
                       {selectedNode.is_info_broker && <span className="badge broker">BROKER</span>}
                     </>
                   ) : (
-                    <span className="badge" style={{background: COLORS[selectedNode.type] || '#888', color: '#000'}}>
+                    <span className="badge badge-community" style={{background: COLORS[selectedNode.type] || '#888'}}>
                       {(selectedNode.type || 'UNKNOWN').toUpperCase()}
                     </span>
                   )}
@@ -497,30 +375,30 @@ function App() {
                   <div className="metrics-grid">
                     <div className="metric-box"><div className="metric-value">{selectedNode.message_count || 0}</div><div className="metric-label">Messages</div></div>
                     <div className="metric-box"><div className="metric-value">{selectedNode.replies_received || 0}</div><div className="metric-label">Replies</div></div>
-                    <div className="metric-box" title={selectedNode.pagerank ?? 0}><div className="metric-value">{selectedNode.pagerank?.toFixed(5) || 0}</div><div className="metric-label">Influence</div></div>
-                    <div className="metric-box"><div className="metric-value">Group {selectedNode.community ?? '?'}</div><div className="metric-label">Community</div></div>
+                    <div className="metric-box" title={selectedNode.pagerank ?? 0}><div className="metric-value">{(selectedNode.pagerank ?? 0).toFixed(3)}</div><div className="metric-label">Influence</div></div>
+                    <div className="metric-box" title={selectedNode.betweenness ?? 0}><div className="metric-value">{(selectedNode.betweenness ?? 0).toFixed(3)}</div><div className="metric-label">Bridging</div></div>
                   </div>
                 ) : (
                   <div className="node-content">
                     {selectedNode.type === 'message' && (
                       <>
                         <p>{selectedNode.text || ''}</p>
-                        <p style={{marginTop:'10px', color: 'var(--text-muted)', fontSize:'0.8rem'}}>
+                        <p className="meta-note">
                           {new Date(selectedNode.timestamp).toLocaleString()}
                         </p>
                         {typeof selectedNode.reply_depth === 'number' && (
-                          <p style={{marginTop:'10px', color: 'var(--text-muted)', fontSize:'0.8rem'}}>
+                          <p className="meta-note">
                             {selectedNode.reply_depth === 0
                               ? `Thread root · ${selectedNode.thread_size} message${selectedNode.thread_size === 1 ? '' : 's'} in this thread`
                               : `Reply depth ${selectedNode.reply_depth} of ${selectedNode.thread_size}-message thread`}
-                            <br />Its reply-to and reply-from links are highlighted on the graph.
+                            
                           </p>
                         )}
                       </>
                     )}
                     {selectedNode.type === 'topic' && (
                       <>
-                        <p style={{marginBottom: '10px'}}>
+                        <p className="topic-intro">
                           {topicMessages.length > 0
                             ? <>Came up in <strong>{topicMessages.length}</strong> message{topicMessages.length === 1 ? '' : 's'}:</>
                             : <>No messages matched this topic directly.</>}
@@ -550,7 +428,7 @@ function App() {
 
           <div className="legend-panel glass-panel overlay-panel">
             <button type="button" className="legend-toggle" aria-expanded={legendOpen} onClick={() => setLegendOpen(o => !o)}>
-              <h4>Legend</h4>
+              <span className="legend-title">Legend</span>
               <ChevronDown size={16} className={legendOpen ? '' : 'legend-chevron-collapsed'} />
             </button>
             <div className={`legend-collapse ${legendOpen ? '' : 'collapsed'}`} inert={!legendOpen}>
@@ -581,8 +459,9 @@ function App() {
                     </button>
                   )}
                 </div>
-                <div className="legend-item"><span className="dot" style={{background: `linear-gradient(135deg, ${COMMUNITY_PALETTE[0]}, ${COMMUNITY_PALETTE[3]}, ${COMMUNITY_PALETTE[6]})`}}></span> Person (color: group, size: influence)</div>
-                <div className="legend-item"><span className="dot topic-dot" style={{borderRadius: '2px', transform: 'rotate(45deg)'}}></span> Topic</div>
+                <div className="legend-section-title">Key</div>
+                <div className="legend-item"><span className="dot legend-swatch-person"></span> Person (color: group, size: influence)</div>
+                <div className="legend-item"><span className="dot topic-dot legend-swatch-topic"></span> Topic</div>
                 <div className="legend-item"><span className="dot message-dot"></span> Message</div>
                 <div className="legend-item"><span className="dot chat-dot"></span> Chat</div>
                 <div className="legend-item"><span className="reply-link-swatch"></span> Confirmed reply</div>
@@ -594,21 +473,19 @@ function App() {
                       onChange={(e) => setShowInferredLinks(e.target.checked)}
                     />
                     <span className="inferred-link-swatch"></span>
-                    <span style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>
+                    <span className="legend-note">
                       Show inferred connections (shares wording, no formal reply — never affects influence scores{is3D && '; no arrowhead in 3D'})
                     </span>
                   </label>
                 </div>
-                <div className="legend-item" style={{marginTop: '8px'}}>
-                  <span className="badge influencer" style={{fontSize: '0.65rem'}}>INFLUENCER</span>
-                  <span style={{marginLeft: '6px', fontSize: '0.75rem', color: 'var(--text-muted)'}}>High PageRank — a central, high-influence person</span>
+                <div className="legend-section-title">Badges</div>
+                <div className="legend-item">
+                  <span className="badge influencer legend-badge">INFLUENCER</span>
+                  <span className="legend-note">A central, high-influence person</span>
                 </div>
                 <div className="legend-item">
-                  <span className="badge broker" style={{fontSize: '0.65rem'}}>BROKER</span>
-                  <span style={{marginLeft: '6px', fontSize: '0.75rem', color: 'var(--text-muted)'}}>High betweenness — bridges otherwise separate groups</span>
-                </div>
-                <div className="legend-item" style={{marginTop: '8px', fontSize: '0.75rem', color: 'var(--text-muted)'}}>
-                  Click a node to highlight everything connected to it
+                  <span className="badge broker legend-badge">BROKER</span>
+                  <span className="legend-note">Bridges otherwise separate groups</span>
                 </div>
               </div>
             </div>
