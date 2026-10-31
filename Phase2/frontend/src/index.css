@@ -7,7 +7,31 @@
   --glass-bg: rgba(25, 28, 35, 0.7);
   --glass-border: rgba(255, 255, 255, 0.1);
   --text-main: #f8f9fa;
+  --text-soft: #c9d1d9;
   --text-muted: #8b949e;
+  --surface-solid: #191c23;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* One type and spacing scale for the whole app; only the large steps need
+     to scale with the viewport. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-lg: clamp(1.0625rem, 0.4vw + 1rem, 1.25rem);
+  --text-2xl: clamp(1.75rem, 2.5vw + 1rem, 2.75rem);
+  --text-3xl: clamp(2.5rem, 5.5vw + 1rem, 4.75rem);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.5rem;
+  --space-7: clamp(3rem, 6vw, 5rem);
+  --space-8: clamp(4rem, 10vh, 7rem);
+  --space-9: clamp(6rem, 18vh, 11rem);
+  --gutter: clamp(1rem, 4vw, 2rem);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
   font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;

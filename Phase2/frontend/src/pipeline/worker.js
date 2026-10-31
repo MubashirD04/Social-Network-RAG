@@ -27,7 +27,7 @@ const onnxThreadCount = () => (
 );
 
 const loadRuntime = async (report) => {
-  report('Loading Python runtime…');
+  report({ status: 'Loading Python runtime…' });
   const { loadPyodide } = await import(/* @vite-ignore */ PYODIDE_URL);
   const pyodide = await loadPyodide();
   await pyodide.loadPackage(PYODIDE_PACKAGES, { messageCallback: () => {} });
@@ -41,10 +41,20 @@ const loadRuntime = async (report) => {
   pyodide.runPython("import sys; sys.path.insert(0, '/app')");
   const entry = pyodide.pyimport('src.browser_entry');
 
-  report('Loading embedding model…');
+  report({ status: 'Loading embedding model…' });
   const { pipeline, env } = await import(/* @vite-ignore */ TRANSFORMERS_URL);
   env.backends.onnx.wasm.numThreads = onnxThreadCount();
-  const embed = await pipeline('feature-extraction', EMBEDDING_MODEL, { dtype: 'q8', device: 'wasm' });
+  const embed = await pipeline('feature-extraction', EMBEDDING_MODEL, {
+    dtype: 'q8',
+    device: 'wasm',
+    // Tracks only the weights: the small config files finish first and would
+    // otherwise send the bar to 100% and back.
+    progress_callback: ({ status, file, loaded, total }) => {
+      if (status === 'progress' && file?.endsWith('.onnx')) {
+        report({ model: { fraction: total ? loaded / total : 0, loaded, total } });
+      }
+    },
+  });
 
   return { pyodide, entry, embed };
 };
@@ -64,7 +74,10 @@ const embedTexts = async (embed, texts, report) => {
   for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
     const output = await embed(texts.slice(i, i + EMBED_BATCH_SIZE), { pooling: 'mean', normalize: true });
     vectors.set(output.data, i * EMBEDDING_DIMENSION);
-    report(`Embedding messages… ${Math.min(i + EMBED_BATCH_SIZE, texts.length)} / ${texts.length}`);
+    report({
+      status: 'Embedding messages…',
+      embedding: { fraction: Math.min(i + EMBED_BATCH_SIZE, texts.length) / texts.length, done: Math.min(i + EMBED_BATCH_SIZE, texts.length), total: texts.length },
+    });
   }
   return vectors;
 };
@@ -74,8 +87,11 @@ const toPythonBytes = (pyodide, vectors) => pyodide.toPy(new Uint8Array(vectors.
 const handlers = {
   async analyse({ file }, report) {
     const { pyodide, entry, embed } = await getRuntime(report);
+    // Also covers a second upload and a browser-cached model, neither of
+    // which report any download.
+    report({ model: { fraction: 1 } });
 
-    report('Parsing chat…');
+    report({ status: 'Parsing chat…' });
     const uploadPath = `/tmp/${file.name.replace(/[^\w.-]/g, '_')}`;
     pyodide.FS.writeFile(uploadPath, new Uint8Array(await file.arrayBuffer()));
     let texts;
@@ -90,7 +106,7 @@ const handlers = {
 
     const vectors = await embedTexts(embed, texts, report);
 
-    report('Building graph…');
+    report({ status: 'Building graph…' });
     const chatName = file.name.replace(/\.[^.]+$/, '');
     return JSON.parse(await entry.analyse(toPythonBytes(pyodide, vectors), EMBEDDING_DIMENSION, chatName));
   },

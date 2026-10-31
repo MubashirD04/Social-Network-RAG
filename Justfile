@@ -48,6 +48,10 @@ test:
     export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 && \
     uv run pytest Phase2/tests -v
 
+# Run frontend unit and browser tests
+test-frontend:
+    cd Phase2/frontend && npm test && npm run test:e2e
+
 # Run the social demo script
 demo:
     export PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 && \

@@ -193,16 +193,20 @@ After restarting, you should see the `SocialNetworkRAG` tools available in the p
 ## Developer Tools
 
 - **Run Tests**: `just test` (or `PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 uv run pytest Phase2/tests -v`)
+- **Frontend**: `just test-frontend` runs unit tests, then Playwright. One Playwright test runs the real pipeline and downloads Pyodide and the model. First run needs `npx playwright install chromium` in `Phase2/frontend`. `node e2e/bench.mjs` measures frame timing against `npm run preview`.
 - **Manual Demo**: `just demo` (or `PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 uv run python Phase2/social_demo.py`) — generates a sample graph in `output/`
 - **Large Scale Test**: `PYTHONPATH=$PYTHONPATH:$(pwd)/Phase2 uv run python Phase2/tests/large_social_test.py`
 - **Conversation-linking layer**: `just build-slack-fixture` generates a synthetic Slack export; `just eval-linker <slack.zip>` reports precision/recall against its own `thread_ts` (the only real ground truth available); `just train-linker-classifier <slack.zip>` trains the optional Tier 2 classifier scoring mode. See [docs/context.md](docs/context.md) and [docs/conversation-linking-remaining-work.md](docs/conversation-linking-remaining-work.md).
 
 ## Visualization Legend
 
+The graph opens on people and topics. Selecting a node adds its related messages (up to 40 at a time); "Show every message" in the legend draws them all. A 2D/3D switch sits in the top bar: 3D is desktop-only, needs WebGL, and is off above 1,000 visible nodes. "Social RAG" returns home, and "New chat" analyzes a different export. "Browse nodes" gives a searchable list of everything in the graph for keyboard and screen-reader use.
+
 - **Person Nodes**: Colored by detected community (gray if not in one)
 - **Yellow Diamonds**: Topics (pick 5-10 shown via the in-app slider)
 - **Light Blue Ellipses**: Messages
+- **Red Box**: The chat itself
 - **Yellow Arrows**: Confirmed reply chains (explicit reply or an opening @mention)
-- **Dashed Gray Arrows**: Inferred connections — messages that share distinctive wording but were never formally threaded. Toggleable in the app, and excluded from every influence/broker/community score regardless of whether they're shown.
-- **Node Size**: Reflects Influence (PageRank)
+- **Dashed Gray Arrows**: Inferred connections — messages that share distinctive wording but were never formally threaded. Toggleable in the app, and excluded from every influence/broker/community score regardless of whether they're shown. In 3D they also have no arrowhead, since perspective compresses dashes.
+- **Node Size**: People scale with Influence (PageRank) relative to the chat's top person; messages shrink with reply depth
 - **Linked Context** (search panel): a richer, separate signal from the graph's dashed arrows above — semantic similarity, temporal proximity, speaker turn-taking, and shared keywords, not just wording overlap. Shown under a search result when it connects to another message with no explicit reply between them; click to jump to it in the graph.
