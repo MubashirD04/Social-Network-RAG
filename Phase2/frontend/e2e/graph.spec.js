@@ -91,6 +91,50 @@ test.describe('graph view', () => {
     expect(await blurredOrSeeThrough()).toBe(0);
   });
 
+  test('the details card collapses and expands, and hides its content from keyboards', async ({ page }) => {
+    await pickFromBrowser(page, 'User 0');
+    const card = page.locator('.details-sidebar');
+    await expect(card.getByText('Messages', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Collapse details' }).click();
+    const expand = page.getByRole('button', { name: 'Expand details' });
+    await expect(expand).toHaveAttribute('aria-expanded', 'false');
+    await expect(card.locator('.panel-collapse')).toHaveAttribute('inert');
+    await expect(card.locator('h2')).toHaveText('User 0');
+    await expect.poll(() => card.evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(80);
+
+    // A new selection keeps the card how the viewer left it, with the new title.
+    await page.getByRole('button', { name: /User 1/ }).first().click();
+    await expect(card.locator('h2')).toHaveText('User 1');
+    await expect(expand).toBeVisible();
+
+    await expand.click();
+    await expect(card.getByText('Messages', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Collapse details' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('a message takes the full column, unlike other nodes', async ({ page }) => {
+    const card = page.locator('.details-sidebar');
+    const legend = page.locator('.legend-panel');
+    const rail = await page.locator('.right-rail').boundingBox();
+
+    await pickFromBrowser(page, 'User 0');
+    await expect(legend).toBeVisible();
+    await expect.poll(async () => (await card.boundingBox()).height).toBeLessThan(rail.height * 0.75);
+
+    await page.getByLabel(/Filter people/).fill('message 12 body');
+    await page.getByRole('button', { name: /message 12 body/ }).click();
+    await expect(card).toContainText('message 12 body');
+    await expect(legend).toBeHidden();
+    await expect.poll(async () => (await card.boundingBox()).height).toBeCloseTo(rail.height, 0);
+
+    await page.getByRole('button', { name: 'Collapse details' }).click();
+    await expect(legend).toBeVisible();
+    await page.getByRole('button', { name: 'Expand details' }).click();
+    await page.getByRole('button', { name: 'Close details' }).click();
+    await expect(legend).toBeVisible();
+  });
+
   test('Home returns to the landing page', async ({ page }) => {
     await page.getByRole('button', { name: 'Home' }).click();
     await expect(page.locator('h1')).toBeVisible();
@@ -123,21 +167,47 @@ test.describe('graph view', () => {
   });
 });
 
-test('3D is unavailable at phone width', async ({ page }) => {
+test('clicking 3D at phone width explains why it is unavailable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await useFakePipeline(page, syntheticGraph(10));
   await page.goto('/');
   await uploadFixture(page);
-  await expect(page.getByRole('button', { name: '3D', exact: true })).toBeDisabled();
+  const legend = await page.locator('.legend-panel').boundingBox();
+  expect(legend.y + legend.height).toBeGreaterThan(780);
+
+  const threeD = page.getByRole('button', { name: '3D', exact: true });
+  // Forced because Playwright won't click aria-disabled controls; people can.
+  await threeD.click({ force: true });
+  await expect(page.getByRole('status').filter({ hasText: "3D isn't available on phones and tablets" })).toBeVisible();
+  // Positioned from the center, a toast otherwise shrinks to half the screen.
+  expect((await page.locator('.toast-notice').boundingBox()).width).toBeGreaterThan(300);
+  await expect(page.locator('.view-3d')).toHaveCount(0);
+  await expect(threeD).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(page.locator('.toast-notice')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Legend' })).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('3D waits for the toggle before downloading three.js, and respects limits', async ({ page }) => {
+test('3D explains its node limit, and returns once the view fits', async ({ page }) => {
   await useFakePipeline(page, syntheticGraph(2100));
   await page.goto('/');
   await uploadFixture(page);
   await page.getByRole('checkbox', { name: 'Show every message' }).check();
-  await expect(page.getByRole('button', { name: '3D', exact: true })).toBeDisabled();
+  const notice = page.locator('.toast-notice');
+  await page.getByRole('button', { name: '3D', exact: true }).click({ force: true });
+  await expect(notice).toContainText('3D can show up to 1,000 nodes, and this view has 2,116');
+  await expect(notice).toContainText('Turn off "Show every message"');
+  await expect(page.locator('.view-3d')).toHaveCount(0);
+
+  // Removing the reason delivers the 3D view that was asked for.
+  await page.getByRole('checkbox', { name: 'Show every message' }).uncheck();
+  await expect(page.locator('.view-3d')).toBeVisible();
+  await expect(notice).toHaveCount(0);
+
+  // Outgrowing 3D falls back to 2D with an explanation, not silently.
+  await page.getByRole('checkbox', { name: 'Show every message' }).check();
+  await expect(page.locator('.view-3d')).toHaveCount(0);
+  await expect(notice).toBeVisible();
 });
 
 test.describe('landing page', () => {
