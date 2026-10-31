@@ -113,6 +113,28 @@ test.describe('graph view', () => {
     await expect(page.getByRole('button', { name: 'Collapse details' })).toHaveAttribute('aria-expanded', 'true');
   });
 
+  test('a message takes the full column, unlike other nodes', async ({ page }) => {
+    const card = page.locator('.details-sidebar');
+    const legend = page.locator('.legend-panel');
+    const rail = await page.locator('.right-rail').boundingBox();
+
+    await pickFromBrowser(page, 'User 0');
+    await expect(legend).toBeVisible();
+    await expect.poll(async () => (await card.boundingBox()).height).toBeLessThan(rail.height * 0.75);
+
+    await page.getByLabel(/Filter people/).fill('message 12 body');
+    await page.getByRole('button', { name: /message 12 body/ }).click();
+    await expect(card).toContainText('message 12 body');
+    await expect(legend).toBeHidden();
+    await expect.poll(async () => (await card.boundingBox()).height).toBeCloseTo(rail.height, 0);
+
+    await page.getByRole('button', { name: 'Collapse details' }).click();
+    await expect(legend).toBeVisible();
+    await page.getByRole('button', { name: 'Expand details' }).click();
+    await page.getByRole('button', { name: 'Close details' }).click();
+    await expect(legend).toBeVisible();
+  });
+
   test('Home returns to the landing page', async ({ page }) => {
     await page.getByRole('button', { name: 'Home' }).click();
     await expect(page.locator('h1')).toBeVisible();

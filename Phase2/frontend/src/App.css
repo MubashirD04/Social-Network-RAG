@@ -516,3 +516,10 @@ button:focus-visible, input:focus-visible {
   border-color: var(--accent-teal);
 }
 .toast-icon { flex-shrink: 0; color: var(--accent-teal); }
+
+/* A message is for reading, so it takes the whole column until it's closed or
+   collapsed. Phones keep it partial, or it would hide the node it jumped to. */
+@media (min-width: 768px) {
+  .details-sidebar.is-message:not(.is-collapsed) { flex: 1 1 auto; }
+  .right-rail:has(.is-message:not(.is-collapsed)) .legend-panel { display: none; }
+}

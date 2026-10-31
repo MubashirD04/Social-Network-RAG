@@ -384,7 +384,7 @@ function App() {
           <div className="right-rail">
           <AnimatePresence>
             {selectedNode && (
-              <Motion.div key="details" {...PANEL_MOTION} className={`details-sidebar glass-panel overlay-panel ${detailsOpen ? '' : 'is-collapsed'}`}>
+              <Motion.div key="details" {...PANEL_MOTION} className={`details-sidebar glass-panel overlay-panel ${selectedNode.type === 'message' ? 'is-message' : ''} ${detailsOpen ? '' : 'is-collapsed'}`}>
                 <div className="panel-header">
                   <h2>{selectedNode.label || selectedNode.id}</h2>
                   <div className="panel-actions">
