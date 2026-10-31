@@ -7,9 +7,12 @@
 
 .landing-glow, .node-field-wrap, .node-field {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 100%;
+  /* The largest viewport, so these don't resize as a phone's address bar moves. */
+  height: 100vh;
+  height: 100lvh;
   pointer-events: none;
 }
 
@@ -47,8 +50,26 @@
   -webkit-mask-image: var(--field-mask);
   mask-image: var(--field-mask);
 }
+/* Masking a canvas that repaints every frame is slow on phones, and a flat
+   opacity looks the same here. */
 @media (max-width: 900px) {
-  .node-field { --field-mask: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)); }
+  .node-field {
+    -webkit-mask-image: none;
+    mask-image: none;
+    opacity: 0.4;
+  }
+}
+
+@media (pointer: coarse) {
+  .landing-main h1, .landing-main h2, .landing-main h3,
+  .lede, .section-lead, .privacy p, .step p, .drop-note,
+  .question dt, .question dd {
+    text-shadow: none;
+  }
+}
+
+@media (pointer: coarse) and (prefers-reduced-motion: no-preference) {
+  html:has(.landing) { scroll-behavior: smooth; }
 }
 
 /* --- Hero --- */
@@ -127,11 +148,25 @@
 .progress-labels { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); }
 .progress-detail { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .progress-track {
+  position: relative;
   height: 8px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 999px;
 }
+/* Shows the current stage is still working while its bar waits for the next step. */
+.progress-track.is-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  transform: translateX(-100%);
+  animation: progress-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes progress-shimmer {
+  to { transform: translateX(100%); }
+}
+
 .progress-fill {
   display: block;
   height: 100%;

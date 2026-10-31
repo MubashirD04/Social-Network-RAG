@@ -69,7 +69,7 @@ test.describe('graph view', () => {
     await expect(page.locator('.details-sidebar h2')).toHaveText('User 1');
   });
 
-  test('the details panel is solid for people and topics, in 2D and 3D', async ({ page }) => {
+  test('every graph panel is solid in 2D and 3D', async ({ page }) => {
     const panelStyle = () => page.locator('.details-sidebar').evaluate(el => {
       const { backgroundColor, backdropFilter } = getComputedStyle(el);
       return { backgroundColor, backdropFilter };
@@ -77,12 +77,18 @@ test.describe('graph view', () => {
     const solid = { backgroundColor: 'rgb(25, 28, 35)', backdropFilter: 'none' };
     await pickFromBrowser(page, 'User 0');
     expect(await panelStyle()).toEqual(solid);
+    const blurredOrSeeThrough = () => page.locator('.glass-panel').evaluateAll(els => els.filter(el => {
+      const { backgroundColor, backdropFilter } = getComputedStyle(el);
+      return backdropFilter !== 'none' || backgroundColor !== 'rgb(25, 28, 35)';
+    }).length);
+    expect(await blurredOrSeeThrough()).toBe(0);
     await page.getByRole('button', { name: /topic 0/ }).first().click();
     await expect(page.locator('.details-sidebar h2')).toHaveText('topic 0');
     expect(await panelStyle()).toEqual(solid);
     await page.getByRole('button', { name: '3D', exact: true }).click();
     await expect(page.locator('.view-3d')).toBeVisible();
     expect(await panelStyle()).toEqual(solid);
+    expect(await blurredOrSeeThrough()).toBe(0);
   });
 
   test('Home returns to the landing page', async ({ page }) => {
@@ -150,6 +156,18 @@ test.describe('landing page', () => {
     await expect.poll(() => page.locator('.brand').evaluate(el => getComputedStyle(el).color)).not.toBe(before);
   });
 
+  test('phones use native scrolling and an unmasked canvas', async ({ browser }) => {
+    const context = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 700 }, baseURL: 'http://localhost:4173' });
+    const page = await context.newPage();
+    await page.goto('/');
+    const canvas = page.locator('canvas.node-field');
+    await expect(canvas).toBeVisible();
+    await expect(page.locator('html.lenis')).toHaveCount(0);
+    expect(await canvas.evaluate(el => getComputedStyle(el).maskImage)).toBe('none');
+
+    await context.close();
+  });
+
   test('reduced motion turns off smooth scrolling', async ({ browser }) => {
     const context = await browser.newContext({ reducedMotion: 'reduce', baseURL: 'http://localhost:4173' });
     const page = await context.newPage();
@@ -179,14 +197,20 @@ test.describe('landing page', () => {
       window.Worker = class {
         postMessage({ id }) {
           const send = (delay, progress) => setTimeout(() => this.onmessage({ data: { id, progress } }), delay);
-          send(0, { status: 'Loading embedding model…', model: { fraction: 0.5, loaded: 11e6, total: 22e6 } });
-          send(600, { model: { fraction: 1 } });
-          send(600, { status: 'Embedding messages…', embedding: { fraction: 0.25, done: 32, total: 128 } });
+          send(0, { status: 'Loading Python runtime…', runtime: { fraction: 0.25, step: 1, total: 4 } });
+          send(500, { status: 'Loading embedding model…', runtime: { fraction: 1, step: 4, total: 4 }, model: { fraction: 0.5, loaded: 11e6, total: 22e6 } });
+          send(1100, { model: { fraction: 1 } });
+          send(1100, { status: 'Embedding messages…', embedding: { fraction: 0.25, done: 32, total: 128 } });
         }
       };
     });
     await page.goto('/');
     await page.locator('input[type="file"]').setInputFiles({ name: 'chat.txt', mimeType: 'text/plain', buffer: Buffer.from('x') });
+
+    const runtime = page.getByRole('progressbar', { name: 'Python runtime' });
+    await expect(runtime).toHaveAttribute('aria-valuenow', '25');
+    await expect(page.getByText('Step 2 of 4')).toBeVisible();
+    await expect(runtime).toHaveClass(/is-active/);
 
     const model = page.getByRole('progressbar', { name: 'Embedding model' });
     const embedding = page.getByRole('progressbar', { name: 'Message embeddings' });
@@ -195,7 +219,9 @@ test.describe('landing page', () => {
     await expect(embedding).toHaveAttribute('aria-valuenow', '0');
 
     await expect(model).toHaveAttribute('aria-valuenow', '100');
-    await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+    await expect(runtime).toHaveAttribute('aria-valuenow', '100');
+    await expect(runtime).not.toHaveClass(/is-active/);
+    await expect(page.getByText('Ready', { exact: true })).toHaveCount(2);
     await expect(embedding).toHaveAttribute('aria-valuenow', '25');
     await expect(page.getByText('32 / 128')).toBeVisible();
   });

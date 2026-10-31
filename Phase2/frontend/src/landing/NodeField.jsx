@@ -80,9 +80,10 @@ function NodeField({ progress }) {
     } catch {
       return undefined; // No WebGL: the page's CSS glow carries the background alone.
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const isTouch = window.matchMedia('(pointer: coarse)').matches;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouch ? 1.5 : 2));
 
-    const count = window.innerWidth < 768 ? 70 : 140;
+    const count = window.innerWidth < 768 ? 60 : 140;
     const { nodes, links, neighbors } = buildNetwork(count);
 
     const scene = new Scene();
@@ -120,9 +121,13 @@ function NodeField({ progress }) {
     const live = nodes.map(() => new Vector3());
     const tint = nodes.map(() => new Color());
     let aspect = 1;
+    let width = 0;
+    let height = 0;
+    let scroll = 0;
 
     const render = (now) => {
-      const scroll = reduceMotion ? 0 : progress.get();
+      // Eased, because scroll position can arrive in uneven jumps on phones.
+      if (!reduceMotion) scroll += (progress.get() - scroll) * 0.1;
       pointer.parallaxX += (pointer.x > 1 ? 0 : pointer.x - pointer.parallaxX) * 0.03;
       pointer.parallaxY += (pointer.y > 1 ? 0 : pointer.y - pointer.parallaxY) * 0.03;
 
@@ -183,15 +188,15 @@ function NodeField({ progress }) {
 
     const onPointerMove = (event) => {
       if (event.pointerType !== 'mouse') return;
-      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      pointer.x = (event.clientX / width) * 2 - 1;
+      pointer.y = -(event.clientY / height) * 2 + 1;
     };
     const onPointerLeave = () => { pointer.x = 10; pointer.y = 10; };
 
     const onPointerDown = (event) => {
       if (event.target.closest?.(INTERACTIVE)) return;
-      const x = (event.clientX / window.innerWidth) * 2 - 1;
-      const y = -(event.clientY / window.innerHeight) * 2 + 1;
+      const x = (event.clientX / width) * 2 - 1;
+      const y = -(event.clientY / height) * 2 + 1;
       let start = 0;
       let nearest = Infinity;
       live.forEach((point, i) => {
@@ -215,7 +220,11 @@ function NodeField({ progress }) {
     };
 
     const resize = () => {
-      const { innerWidth: width, innerHeight: height } = window;
+      // Phones fire resize as the address bar slides away during a scroll. The
+      // canvas fills the largest viewport, so only a width change matters.
+      if (canvas.clientWidth === width && canvas.clientHeight === height) return;
+      width = canvas.clientWidth;
+      height = canvas.clientHeight;
       aspect = width / height;
       renderer.setSize(width, height, false);
       camera.aspect = aspect;

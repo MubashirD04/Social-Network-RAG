@@ -35,8 +35,10 @@ test('real pipeline: cross-origin isolated, only expected origins, no chat text 
   await expect(page.getByLabel('Ask a question about the chat')).toBeVisible({ timeout: 280_000 });
 
   const bars = await page.evaluate(() => window.__bars);
+  console.log('runtime bar:', [...new Set(bars['Python runtime'])].join(' '));
   console.log('model bar:', [...new Set(bars['Embedding model'])].join(' '));
   console.log('embedding bar:', [...new Set(bars['Message embeddings'])].join(' '));
+  expect(Math.max(...bars['Python runtime'])).toBe(100);
   expect(Math.max(...bars['Embedding model'])).toBe(100);
   expect(Math.max(...bars['Message embeddings'])).toBe(100);
 

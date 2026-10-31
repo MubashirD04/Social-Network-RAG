@@ -24,6 +24,11 @@ const QUESTIONS = [
   { q: 'Who said that thing?', a: 'Semantic search finds messages by meaning, along with the conversation around them.' },
 ];
 
+// Phones scroll natively, and restyling the page on every scroll event makes
+// that stutter, so the color ramp moves in visible-but-cheap steps there.
+const TOUCH_FLOW_STEPS = 24;
+const isTouch = () => window.matchMedia('(pointer: coarse)').matches;
+
 const reveal = {
   initial: { opacity: 0, y: 24 },
   whileInView: { opacity: 1, y: 0 },
@@ -32,6 +37,14 @@ const reveal = {
 };
 
 const toMB = (bytes) => (bytes / 1e6).toFixed(0);
+
+const isDone = (stage) => stage?.fraction >= 1;
+
+const describeRuntime = (runtime) => {
+  if (!runtime) return 'Waiting';
+  if (isDone(runtime)) return 'Ready';
+  return `Step ${Math.min(runtime.step + 1, runtime.total)} of ${runtime.total}`;
+};
 
 const describeModel = (model) => {
   if (!model) return 'Waiting';
@@ -43,7 +56,7 @@ const describeEmbedding = (embedding) => (
   embedding ? `${embedding.done.toLocaleString()} / ${embedding.total.toLocaleString()}` : 'Waiting'
 );
 
-function ProgressBar({ label, detail, fraction }) {
+function ProgressBar({ label, detail, fraction, active }) {
   const percent = Math.round((fraction ?? 0) * 100);
   return (
     <div className="progress-row">
@@ -52,7 +65,7 @@ function ProgressBar({ label, detail, fraction }) {
         <span className="progress-detail">{detail}</span>
       </div>
       <div
-        className={`progress-track ${fraction === undefined ? 'is-waiting' : ''}`}
+        className={`progress-track ${active ? 'is-active' : ''}`}
         role="progressbar"
         aria-label={label}
         aria-valuemin={0}
@@ -77,17 +90,20 @@ function Landing({ loading, progress, error, onFile }) {
   const [showField, setShowField] = useState(false);
 
   const { scrollYProgress } = useScroll();
-  const flow = useTransform(scrollYProgress, FLOW_STOPS, FLOW_COLORS);
+  const flowProgress = useTransform(scrollYProgress, (value) => (
+    isTouch() ? Math.round(value * TOUCH_FLOW_STEPS) / TOUCH_FLOW_STEPS : value
+  ));
+  const flow = useTransform(flowProgress, FLOW_STOPS, FLOW_COLORS);
   const { scrollYProgress: stepsProgress } = useScroll({ target: stepsRef, offset: ['start 75%', 'end 60%'] });
 
   useEffect(() => {
-    if (prefersReducedMotion()) return undefined;
+    if (prefersReducedMotion() || isTouch()) return undefined;
     const lenis = new Lenis({ autoRaf: true, anchors: true, lerp: 0.1 });
     return () => lenis.destroy();
   }, []);
 
   // The graph view has no page scroll, so don't hand it a scrolled body.
-  useEffect(() => () => window.scrollTo(0, 0), []);
+  useEffect(() => () => window.scrollTo({ top: 0, behavior: 'instant' }), []);
 
   // three.js only loads once the page itself has painted, and never for
   // someone who has asked their browser to save data.
@@ -142,8 +158,9 @@ function Landing({ loading, progress, error, onFile }) {
             {loading ? (
               <div className="drop-target drop-progress">
                 <p className="drop-status" role="status">{progress.status}</p>
-                <ProgressBar label="Embedding model" detail={describeModel(progress.model)} fraction={progress.model?.fraction} />
-                <ProgressBar label="Message embeddings" detail={describeEmbedding(progress.embedding)} fraction={progress.embedding?.fraction} />
+                <ProgressBar label="Python runtime" detail={describeRuntime(progress.runtime)} fraction={progress.runtime?.fraction} active={!isDone(progress.runtime)} />
+                <ProgressBar label="Embedding model" detail={describeModel(progress.model)} fraction={progress.model?.fraction} active={isDone(progress.runtime) && !isDone(progress.model)} />
+                <ProgressBar label="Message embeddings" detail={describeEmbedding(progress.embedding)} fraction={progress.embedding?.fraction} active={isDone(progress.model) && !isDone(progress.embedding)} />
               </div>
             ) : (
               <button type="button" className="drop-target" onClick={() => fileInputRef.current.click()}>

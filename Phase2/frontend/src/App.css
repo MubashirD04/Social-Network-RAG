@@ -146,13 +146,6 @@
   padding: 20px;
 }
 
-/* Solid so what's selected reads clearly, whatever the graph is doing behind it. */
-.glass-panel.details-sidebar, .view-3d .glass-panel.details-sidebar {
-  background: var(--surface-solid);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -436,14 +429,6 @@ button:focus-visible, input:focus-visible {
   outline-offset: 2px;
 }
 
-/* Blurring what's behind a panel means re-sampling a canvas that repaints
-   every frame, a cost 3D doesn't need on top of its own rendering. */
-.view-3d .glass-panel {
-  background: rgba(25, 28, 35, 0.92);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
 @media (max-width: 767px) {
   .top-bar { top: 8px; width: calc(100% - 16px); padding: 8px 10px; gap: 8px; }
   .branding-name, .new-chat-label { display: none; }
@@ -465,6 +450,7 @@ button:focus-visible, input:focus-visible {
   *, *::before, *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 
