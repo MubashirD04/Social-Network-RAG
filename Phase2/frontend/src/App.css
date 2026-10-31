@@ -501,8 +501,7 @@ button:focus-visible, input:focus-visible {
 .panel-header h2 { min-width: 0; overflow-wrap: anywhere; }
 .panel-actions { display: flex; flex-shrink: 0; align-items: center; gap: var(--space-2); }
 .panel-toggle:hover { color: var(--text-main); }
-.panel-toggle svg { display: block; transition: transform 0.3s ease; }
-.panel-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.panel-toggle svg { display: block; }
 .panel-collapse { margin-top: 0; }
 .details-sidebar .panel-header { transition: margin-bottom 0.3s ease; }
 .details-sidebar.is-collapsed { min-height: 0; padding-block: var(--space-3); }
@@ -517,9 +516,8 @@ button:focus-visible, input:focus-visible {
 }
 .toast-icon { flex-shrink: 0; color: var(--accent-teal); }
 
-/* A message is for reading, so it takes the whole column until it's closed or
-   collapsed. Phones keep it partial, or it would hide the node it jumped to. */
-@media (min-width: 768px) {
-  .details-sidebar.is-message:not(.is-collapsed) { flex: 1 1 auto; }
-  .right-rail:has(.is-message:not(.is-collapsed)) .legend-panel { display: none; }
-}
+/* Topics and messages are for reading, so they take the whole column until
+   they're stepped down. */
+.details-sidebar.is-full { flex: 1 1 auto; max-height: none; }
+.right-rail:has(.is-full) .legend-panel { display: none; }
+.details-sidebar.is-half { max-height: 50%; }

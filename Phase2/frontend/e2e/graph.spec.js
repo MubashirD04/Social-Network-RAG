@@ -98,7 +98,6 @@ test.describe('graph view', () => {
 
     await page.getByRole('button', { name: 'Collapse details' }).click();
     const expand = page.getByRole('button', { name: 'Expand details' });
-    await expect(expand).toHaveAttribute('aria-expanded', 'false');
     await expect(card.locator('.panel-collapse')).toHaveAttribute('inert');
     await expect(card.locator('h2')).toHaveText('User 0');
     await expect.poll(() => card.evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(80);
@@ -110,29 +109,41 @@ test.describe('graph view', () => {
 
     await expand.click();
     await expect(card.getByText('Messages', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Collapse details' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('button', { name: 'Collapse details' })).toBeVisible();
   });
 
-  test('a message takes the full column, unlike other nodes', async ({ page }) => {
+  test('topics and messages open full height, then step down to half and to the title', async ({ page }) => {
     const card = page.locator('.details-sidebar');
     const legend = page.locator('.legend-panel');
     const rail = await page.locator('.right-rail').boundingBox();
+    const height = async () => (await card.boundingBox()).height;
 
     await pickFromBrowser(page, 'User 0');
     await expect(legend).toBeVisible();
-    await expect.poll(async () => (await card.boundingBox()).height).toBeLessThan(rail.height * 0.75);
+    await expect.poll(height).toBeLessThan(rail.height * 0.75);
+    await expect(page.getByRole('button', { name: 'Expand details' })).toHaveCount(0);
 
-    await page.getByLabel(/Filter people/).fill('message 12 body');
-    await page.getByRole('button', { name: /message 12 body/ }).click();
-    await expect(card).toContainText('message 12 body');
+    await page.getByRole('button', { name: /topic 0/ }).first().click();
     await expect(legend).toBeHidden();
-    await expect.poll(async () => (await card.boundingBox()).height).toBeCloseTo(rail.height, 0);
+    await expect.poll(height).toBeCloseTo(rail.height, 0);
 
     await page.getByRole('button', { name: 'Collapse details' }).click();
     await expect(legend).toBeVisible();
+    await expect.poll(height).toBeCloseTo(rail.height / 2, 0);
+
+    // A message from the list keeps that size, but opening a topic restores it.
+    await card.getByRole('button', { name: /message 0 body/ }).click();
+    await expect(card).toHaveClass(/is-half/);
+    await page.getByRole('button', { name: /topic 1/ }).first().click();
+    await expect.poll(height).toBeCloseTo(rail.height, 0);
+
+    await page.getByRole('button', { name: 'Collapse details' }).click();
+    await page.getByRole('button', { name: 'Collapse details' }).click();
+    await expect.poll(height).toBeLessThan(80);
+    await expect(page.getByRole('button', { name: 'Collapse details' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Expand details' }).click();
-    await page.getByRole('button', { name: 'Close details' }).click();
-    await expect(legend).toBeVisible();
+    await page.getByRole('button', { name: 'Expand details' }).click();
+    await expect.poll(height).toBeCloseTo(rail.height, 0);
   });
 
   test('Home returns to the landing page', async ({ page }) => {
@@ -165,6 +176,24 @@ test.describe('graph view', () => {
     expect(loaded.some(n => n.includes('Graph2D'))).toBe(true);
     expect(loaded.some(n => n.includes('Graph3D'))).toBe(false);
   });
+});
+
+test('a topic fills the screen on a phone and can shrink to half', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await useFakePipeline(page, syntheticGraph(60));
+  await page.goto('/');
+  await uploadFixture(page);
+  await openBrowser(page);
+  await page.getByRole('button', { name: /topic 0/ }).first().click();
+  await page.getByRole('button', { name: 'Close node browser' }).click();
+
+  const card = page.locator('.details-sidebar');
+  const rail = await page.locator('.right-rail').boundingBox();
+  await expect(page.locator('.legend-panel')).toBeHidden();
+  await expect.poll(async () => (await card.boundingBox()).height).toBeCloseTo(rail.height, 0);
+  await page.getByRole('button', { name: 'Collapse details' }).click();
+  await expect.poll(async () => (await card.boundingBox()).height).toBeCloseTo(rail.height / 2, 0);
+  await expect(page.locator('.legend-panel')).toBeVisible();
 });
 
 test('clicking 3D at phone width explains why it is unavailable', async ({ page }) => {

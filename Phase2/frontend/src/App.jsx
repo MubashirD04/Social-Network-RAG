@@ -4,7 +4,7 @@
 // client) and is not meant to be embedded here.
 import React, { lazy, Suspense, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react';
-import { Network, Search, Upload, X, ChevronDown, Info, List } from 'lucide-react';
+import { Network, Search, Upload, X, ChevronDown, ChevronUp, Info, List } from 'lucide-react';
 import Landing from './landing/Landing';
 import NodeBrowser from './NodeBrowser';
 import { analyseFile, searchMessages, setTopicCountInWorker } from './pipeline/client';
@@ -82,7 +82,7 @@ function App() {
   const [showAllMessages, setShowAllMessages] = useState(false);
   const [expandedIds, setExpandedIds] = useState(() => new Set());
   const [wants3D, setWants3D] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [detailsSize, setDetailsSize] = useState('auto');
   const [browserOpen, setBrowserOpen] = useState(false);
 
   // The graph view relies on fixed-position panels that never overflow the
@@ -149,7 +149,20 @@ function App() {
     setExpandedIds(prev => new Set([...prev, ...expansionFor(node, graphData)]));
     setSelectedId(id);
     setFocusRequest({ id });
+    // Opening a topic always gets the room for its list. A message opened from
+    // that list keeps the size the viewer chose, so the graph stays in view.
+    if (node.type === 'topic') setDetailsSize(size => (size === 'half' ? 'auto' : size));
   }, [nodeById, graphData]);
+
+  // Topics and messages open at full height, stepping down to half and then
+  // to just the title. A person's card is short, so it only has the title step.
+  const isTallCard = selectedNode?.type === 'topic' || selectedNode?.type === 'message';
+  const canExpand = detailsSize !== 'auto' && (isTallCard || detailsSize === 'title');
+  const collapseDetails = () => setDetailsSize(detailsSize === 'auto' && isTallCard ? 'half' : 'title');
+  const expandDetails = () => setDetailsSize(detailsSize === 'title' && isTallCard ? 'half' : 'auto');
+  const detailsClass = detailsSize === 'title' ? 'is-collapsed'
+    : !isTallCard ? ''
+    : detailsSize === 'half' ? 'is-half' : 'is-full';
 
   const clearSelection = useCallback(() => setSelectedId(null), []);
 
@@ -384,24 +397,24 @@ function App() {
           <div className="right-rail">
           <AnimatePresence>
             {selectedNode && (
-              <Motion.div key="details" {...PANEL_MOTION} className={`details-sidebar glass-panel overlay-panel ${selectedNode.type === 'message' ? 'is-message' : ''} ${detailsOpen ? '' : 'is-collapsed'}`}>
+              <Motion.div key="details" {...PANEL_MOTION} className={`details-sidebar glass-panel overlay-panel ${detailsClass}`}>
                 <div className="panel-header">
                   <h2>{selectedNode.label || selectedNode.id}</h2>
                   <div className="panel-actions">
-                    <button
-                      type="button"
-                      className="close-btn panel-toggle"
-                      aria-label={detailsOpen ? 'Collapse details' : 'Expand details'}
-                      title={detailsOpen ? 'Collapse details' : 'Expand details'}
-                      aria-expanded={detailsOpen}
-                      onClick={() => setDetailsOpen(o => !o)}
-                    >
-                      <ChevronDown size={20} aria-hidden="true" />
-                    </button>
+                    {canExpand && (
+                      <button type="button" className="close-btn panel-toggle" aria-label="Expand details" title="Expand details" onClick={expandDetails}>
+                        <ChevronUp size={20} aria-hidden="true" />
+                      </button>
+                    )}
+                    {detailsSize !== 'title' && (
+                      <button type="button" className="close-btn panel-toggle" aria-label="Collapse details" title="Collapse details" onClick={collapseDetails}>
+                        <ChevronDown size={20} aria-hidden="true" />
+                      </button>
+                    )}
                     <button type="button" className="close-btn" aria-label="Close details" title="Close details" onClick={clearSelection}><X size={20} /></button>
                   </div>
                 </div>
-                <div className={`legend-collapse panel-collapse ${detailsOpen ? '' : 'collapsed'}`} inert={!detailsOpen}>
+                <div className={`legend-collapse panel-collapse ${detailsSize === 'title' ? 'collapsed' : ''}`} inert={detailsSize === 'title'}>
                   <div className="legend-collapse-inner">
                 <div className="badge-container">
                   {selectedNode.type === 'person' ? (
