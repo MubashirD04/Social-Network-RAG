@@ -12,17 +12,18 @@ const FIT_PADDING = 60;
 const IDLE_PAUSE_MS = 3000;
 const ARROW_LENGTH = 5;
 const BLOOM_MIN_CORES = 8;
+const MSAA_SAMPLES = 4;
 
 // One geometry per shape, scaled per node. The library's accessors rebuild
 // the scene whenever they change, so everything selection-related happens by
 // mutating these per-object materials instead.
 const GEOMETRY = {
-  person: new THREE.SphereGeometry(1, 16, 12),
-  message: new THREE.SphereGeometry(1, 12, 8),
+  person: new THREE.SphereGeometry(1, 48, 32),
+  message: new THREE.SphereGeometry(1, 24, 16),
   topic: new THREE.OctahedronGeometry(1),
   chat: new THREE.BoxGeometry(2, 1.4, 1.4),
 };
-const ARROW_GEOMETRY = new THREE.ConeGeometry(1.4, ARROW_LENGTH, 8).rotateX(Math.PI / 2);
+const ARROW_GEOMETRY = new THREE.ConeGeometry(1.4, ARROW_LENGTH, 16).rotateX(Math.PI / 2);
 const FORWARD = new THREE.Vector3(0, 0, 1);
 const direction = new THREE.Vector3();
 const noRaycast = () => {};
@@ -108,6 +109,12 @@ const Graph3D = forwardRef(function Graph3D({ graph, highlight, selectedId, widt
     // Thresholded so only bright fills bloom. Inferred edges stay well below
     // it, keeping their dashes crisp.
     const composer = fg.postProcessingComposer();
+    // Bloom renders through off-screen targets, which skip the canvas's own
+    // anti-aliasing and would leave every silhouette jagged.
+    [composer.renderTarget1, composer.renderTarget2].forEach(target => {
+      target.samples = MSAA_SAMPLES;
+      target.dispose();
+    });
     // The renderer's clear color isn't linearized for the composer's targets,
     // so OutputPass would brighten it. A scene background is handled correctly.
     fg.scene().background = new THREE.Color(COLORS.bg);

@@ -35,7 +35,7 @@ const measure = (page) => page.evaluate(() => new Promise(resolve => {
 
 for (const size of sizes) {
   for (const [view, all] of [['2D', false], ['2D', true], ['3D', false], ['3D', true]]) {
-    if (view === '3D' && all && size > 1000) continue; // over MAX_3D_NODES
+    if (view === '3D' && all && size > 980) continue; // over MAX_3D_NODES
     // A fresh browser per case: a heavy earlier page otherwise slows the next one.
     const browser = await launch();
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
