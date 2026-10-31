@@ -150,6 +150,18 @@ test.describe('landing page', () => {
     await expect.poll(() => page.locator('.brand').evaluate(el => getComputedStyle(el).color)).not.toBe(before);
   });
 
+  test('phones use native scrolling and an unmasked canvas', async ({ browser }) => {
+    const context = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 700 }, baseURL: 'http://localhost:4173' });
+    const page = await context.newPage();
+    await page.goto('/');
+    const canvas = page.locator('canvas.node-field');
+    await expect(canvas).toBeVisible();
+    await expect(page.locator('html.lenis')).toHaveCount(0);
+    expect(await canvas.evaluate(el => getComputedStyle(el).maskImage)).toBe('none');
+
+    await context.close();
+  });
+
   test('reduced motion turns off smooth scrolling', async ({ browser }) => {
     const context = await browser.newContext({ reducedMotion: 'reduce', baseURL: 'http://localhost:4173' });
     const page = await context.newPage();

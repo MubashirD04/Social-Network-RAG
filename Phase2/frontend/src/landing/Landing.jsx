@@ -24,6 +24,11 @@ const QUESTIONS = [
   { q: 'Who said that thing?', a: 'Semantic search finds messages by meaning, along with the conversation around them.' },
 ];
 
+// Phones scroll natively, and restyling the page on every scroll event makes
+// that stutter, so the color ramp moves in visible-but-cheap steps there.
+const TOUCH_FLOW_STEPS = 24;
+const isTouch = () => window.matchMedia('(pointer: coarse)').matches;
+
 const reveal = {
   initial: { opacity: 0, y: 24 },
   whileInView: { opacity: 1, y: 0 },
@@ -77,17 +82,20 @@ function Landing({ loading, progress, error, onFile }) {
   const [showField, setShowField] = useState(false);
 
   const { scrollYProgress } = useScroll();
-  const flow = useTransform(scrollYProgress, FLOW_STOPS, FLOW_COLORS);
+  const flowProgress = useTransform(scrollYProgress, (value) => (
+    isTouch() ? Math.round(value * TOUCH_FLOW_STEPS) / TOUCH_FLOW_STEPS : value
+  ));
+  const flow = useTransform(flowProgress, FLOW_STOPS, FLOW_COLORS);
   const { scrollYProgress: stepsProgress } = useScroll({ target: stepsRef, offset: ['start 75%', 'end 60%'] });
 
   useEffect(() => {
-    if (prefersReducedMotion()) return undefined;
+    if (prefersReducedMotion() || isTouch()) return undefined;
     const lenis = new Lenis({ autoRaf: true, anchors: true, lerp: 0.1 });
     return () => lenis.destroy();
   }, []);
 
   // The graph view has no page scroll, so don't hand it a scrolled body.
-  useEffect(() => () => window.scrollTo(0, 0), []);
+  useEffect(() => () => window.scrollTo({ top: 0, behavior: 'instant' }), []);
 
   // three.js only loads once the page itself has painted, and never for
   // someone who has asked their browser to save data.

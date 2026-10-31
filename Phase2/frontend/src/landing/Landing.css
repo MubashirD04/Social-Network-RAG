@@ -7,9 +7,12 @@
 
 .landing-glow, .node-field-wrap, .node-field {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 100%;
+  /* The largest viewport, so these don't resize as a phone's address bar moves. */
+  height: 100vh;
+  height: 100lvh;
   pointer-events: none;
 }
 
@@ -47,8 +50,26 @@
   -webkit-mask-image: var(--field-mask);
   mask-image: var(--field-mask);
 }
+/* Masking a canvas that repaints every frame is slow on phones, and a flat
+   opacity looks the same here. */
 @media (max-width: 900px) {
-  .node-field { --field-mask: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)); }
+  .node-field {
+    -webkit-mask-image: none;
+    mask-image: none;
+    opacity: 0.4;
+  }
+}
+
+@media (pointer: coarse) {
+  .landing-main h1, .landing-main h2, .landing-main h3,
+  .lede, .section-lead, .privacy p, .step p, .drop-note,
+  .question dt, .question dd {
+    text-shadow: none;
+  }
+}
+
+@media (pointer: coarse) and (prefers-reduced-motion: no-preference) {
+  html:has(.landing) { scroll-behavior: smooth; }
 }
 
 /* --- Hero --- */
