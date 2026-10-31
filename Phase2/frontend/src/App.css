@@ -29,11 +29,36 @@
 
 .branding {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
+  padding: 4px;
+  font: inherit;
   font-weight: 700;
   color: var(--accent-teal);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
 }
+.branding:hover { color: var(--text-main); }
+
+.new-chat-btn {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-main);
+  background: none;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.new-chat-btn:hover { border-color: var(--accent-teal); color: var(--accent-teal); }
 
 .search-container {
   flex-grow: 1;
@@ -414,7 +439,8 @@ button:focus-visible, input:focus-visible {
 
 @media (max-width: 767px) {
   .top-bar { top: 8px; width: calc(100% - 16px); padding: 8px 10px; gap: 8px; }
-  .branding-name { display: none; }
+  .branding-name, .new-chat-label { display: none; }
+  .new-chat-btn { padding: 6px; border: none; }
   .right-rail { left: 8px; right: 8px; top: 72px; bottom: 8px; width: auto; }
   .details-sidebar { max-height: 45%; margin-top: auto; }
   .legend-panel { margin-top: 0; }

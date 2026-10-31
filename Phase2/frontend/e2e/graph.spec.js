@@ -69,6 +69,31 @@ test.describe('graph view', () => {
     await expect(page.locator('.details-sidebar h2')).toHaveText('User 1');
   });
 
+  test('Home returns to the landing page', async ({ page }) => {
+    await page.getByRole('button', { name: 'Home' }).click();
+    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Browse nodes' })).toHaveCount(0);
+  });
+
+  test('New chat opens the picker and keeps the graph until a file is chosen', async ({ page }) => {
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.getByRole('button', { name: 'New chat' }).click(),
+    ]);
+    await expect(page.getByRole('button', { name: 'Browse nodes' })).toBeVisible();
+
+    await pickFromBrowser(page, 'User 0');
+    await chooser.setFiles({ name: 'other.txt', mimeType: 'text/plain', buffer: Buffer.from('x') });
+    await expect(page.getByRole('button', { name: 'Browse nodes' })).toBeVisible();
+    await expect(page.locator('.details-sidebar')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /expanded message/ })).toHaveCount(0);
+  });
+
+  test('New chat rejecting a bad file explains why on the landing page', async ({ page }) => {
+    await page.getByLabel('New chat export file').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from('x') });
+    await expect(page.getByRole('alert')).toContainText("photo.png isn't a supported export");
+  });
+
   test('landing and graph chunks stay out of each other\'s way', async ({ page }) => {
     const loaded = await page.evaluate(() => performance.getEntriesByType('resource').map(r => r.name));
     expect(loaded.some(n => n.includes('Graph2D'))).toBe(true);

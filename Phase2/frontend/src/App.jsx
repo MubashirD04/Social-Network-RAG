@@ -4,7 +4,7 @@
 // client) and is not meant to be embedded here.
 import React, { lazy, Suspense, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { AnimatePresence, MotionConfig, motion as Motion } from 'motion/react';
-import { Network, Search, FolderOpen, X, ChevronDown, List } from 'lucide-react';
+import { Network, Search, Upload, X, ChevronDown, List } from 'lucide-react';
 import Landing from './landing/Landing';
 import NodeBrowser from './NodeBrowser';
 import { analyseFile, searchMessages, setTopicCountInWorker } from './pipeline/client';
@@ -120,6 +120,7 @@ function App() {
   );
 
   const graphRef = useRef();
+  const newChatInputRef = useRef();
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   useEffect(() => {
@@ -270,9 +271,9 @@ function App() {
           </div>
 
           <div className="top-bar glass-panel overlay-panel">
-            <div className="branding">
-              <Network size={20} /> <span className="branding-name">Social RAG</span>
-            </div>
+            <button type="button" className="branding" aria-label="Home" title="Back to the home page" onClick={resetApp}>
+              <Network size={20} aria-hidden="true" /> <span className="branding-name">Social RAG</span>
+            </button>
             <form className="search-container" role="search" onSubmit={(e) => { e.preventDefault(); executeSearch(); }}>
               <button type="submit" className="search-submit" aria-label="Search messages">
                 <Search className="search-icon" size={18} />
@@ -294,9 +295,24 @@ function App() {
             <button type="button" className="icon-btn" title="Browse nodes" aria-label="Browse nodes" aria-expanded={browserOpen} onClick={() => setBrowserOpen(o => !o)}>
               <List size={20} />
             </button>
-            <button type="button" className="icon-btn" title="Load another chat" aria-label="Load another chat" onClick={resetApp}>
-              <FolderOpen size={20} />
+            <button type="button" className="new-chat-btn" aria-label="New chat" title="Analyze a different chat export" onClick={() => newChatInputRef.current.click()}>
+              <Upload size={16} aria-hidden="true" /> <span className="new-chat-label">New chat</span>
             </button>
+            <input
+              type="file"
+              ref={newChatInputRef}
+              className="hidden"
+              aria-label="New chat export file"
+              accept=".txt,.json,.zip"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                // The current graph stays until a file is actually chosen, so
+                // cancelling the picker loses nothing. Progress shows on the landing page.
+                resetApp();
+                handleFileUpload(file);
+              }}
+            />
           </div>
 
           <AnimatePresence mode="wait">

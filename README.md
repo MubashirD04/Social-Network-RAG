@@ -200,7 +200,7 @@ After restarting, you should see the `SocialNetworkRAG` tools available in the p
 
 ## Visualization Legend
 
-The graph opens on people and topics. Selecting a node adds its related messages (up to 40 at a time); "Show every message" in the legend draws them all. A 2D/3D switch sits in the top bar: 3D is desktop-only, needs WebGL, and is off above 1,000 visible nodes. "Browse nodes" gives a searchable list of everything in the graph for keyboard and screen-reader use.
+The graph opens on people and topics. Selecting a node adds its related messages (up to 40 at a time); "Show every message" in the legend draws them all. A 2D/3D switch sits in the top bar: 3D is desktop-only, needs WebGL, and is off above 1,000 visible nodes. "Social RAG" returns home, and "New chat" analyzes a different export. "Browse nodes" gives a searchable list of everything in the graph for keyboard and screen-reader use.
 
 - **Person Nodes**: Colored by detected community (gray if not in one)
 - **Yellow Diamonds**: Topics (pick 5-10 shown via the in-app slider)
