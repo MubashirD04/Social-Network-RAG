@@ -17,5 +17,6 @@ export default defineConfig({
     fs: { allow: ['..'] }
   },
   preview: { headers: crossOriginIsolation },
-  worker: { format: 'es' }
+  worker: { format: 'es' },
+  test: { include: ['src/**/*.test.js'] }
 })

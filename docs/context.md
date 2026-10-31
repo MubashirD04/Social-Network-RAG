@@ -39,17 +39,26 @@ Social-Network-RAG/
 │   ├── mcp_server/
 │   │   ├── __init__.py
 │   │   └── server.py                 # MCP server — thin wrappers over API calls
-│   ├── frontend/                     # Phase 5 — React + Vite, functional and tested (see Known Limitations)
+│   ├── frontend/                     # Phase 5 — React + Vite, unit + Playwright tests
 │   │   ├── src/
 │   │   │   ├── App.jsx               # Main component: upload, graph, search + linked-context display
 │   │   │   ├── App.css
 │   │   │   ├── index.css
 │   │   │   ├── main.jsx
+│   │   │   ├── NodeBrowser.jsx       # Searchable non-spatial list of all nodes
 │   │   │   ├── NetworkBackground.jsx # Landing-page animated background
-│   │   │   └── CodeExample.jsx       # Landing-page code snippet display
+│   │   │   ├── CodeExample.jsx       # Landing-page code snippet display
+│   │   │   ├── pipeline/             # Pyodide + transformers.js worker and its client
+│   │   │   └── graph/
+│   │   │       ├── graphData.js      # Payload formatting, overview/expansion, highlight, position-keeping
+│   │   │       ├── graphStyle.js     # Colors, sizes and edge styling shared by both renderers
+│   │   │       ├── useLiveGraph.js   # Each renderer's private position-carrying copy of the data
+│   │   │       ├── Graph2D.jsx       # react-force-graph-2d renderer (default)
+│   │   │       └── Graph3D.jsx       # react-force-graph-3d renderer (lazy-loaded)
+│   │   ├── e2e/                      # Playwright tests and bench.mjs
 │   │   ├── public/
 │   │   ├── package.json
-│   │   └── vite.config.js            # Dev proxy: /analyse, /graph → localhost:8000
+│   │   └── vite.config.js            # COOP/COEP headers, kept in step with vercel.json
 │   ├── tests/
 │   │   ├── conftest.py                    # Stubs fastembed/yake for fast, offline tests
 │   │   ├── test_social_graph_builder.py   # Pipeline unit tests (nodes, edges, communities, topics)
