@@ -69,6 +69,22 @@ test.describe('graph view', () => {
     await expect(page.locator('.details-sidebar h2')).toHaveText('User 1');
   });
 
+  test('the details panel is solid for people and topics, in 2D and 3D', async ({ page }) => {
+    const panelStyle = () => page.locator('.details-sidebar').evaluate(el => {
+      const { backgroundColor, backdropFilter } = getComputedStyle(el);
+      return { backgroundColor, backdropFilter };
+    });
+    const solid = { backgroundColor: 'rgb(25, 28, 35)', backdropFilter: 'none' };
+    await pickFromBrowser(page, 'User 0');
+    expect(await panelStyle()).toEqual(solid);
+    await page.getByRole('button', { name: /topic 0/ }).first().click();
+    await expect(page.locator('.details-sidebar h2')).toHaveText('topic 0');
+    expect(await panelStyle()).toEqual(solid);
+    await page.getByRole('button', { name: '3D', exact: true }).click();
+    await expect(page.locator('.view-3d')).toBeVisible();
+    expect(await panelStyle()).toEqual(solid);
+  });
+
   test('Home returns to the landing page', async ({ page }) => {
     await page.getByRole('button', { name: 'Home' }).click();
     await expect(page.locator('h1')).toBeVisible();

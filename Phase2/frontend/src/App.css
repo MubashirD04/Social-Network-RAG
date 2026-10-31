@@ -146,6 +146,13 @@
   padding: 20px;
 }
 
+/* Solid so what's selected reads clearly, whatever the graph is doing behind it. */
+.glass-panel.details-sidebar, .view-3d .glass-panel.details-sidebar {
+  background: var(--surface-solid);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
