@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import {
-  AdditiveBlending, BufferAttribute, BufferGeometry, Color, FogExp2, InstancedMesh, LineBasicMaterial,
+  AdditiveBlending, BufferAttribute, BufferGeometry, CircleGeometry, Color, FogExp2, InstancedMesh, LineBasicMaterial,
   LineSegments, MathUtils, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Scene,
-  SphereGeometry, Vector3, WebGLRenderer,
+  Vector3, WebGLRenderer,
 } from 'three';
 import { COLORS, prefersReducedMotion } from '../graph/graphStyle';
 import { FLOW_COLORS } from './flow';
@@ -91,9 +91,13 @@ function NodeField({ progress }) {
     const group = new Object3D();
     scene.add(group);
 
-    const sphere = new SphereGeometry(1, 12, 8);
-    const nodeMaterial = new MeshBasicMaterial();
-    const mesh = new InstancedMesh(sphere, nodeMaterial, count);
+    // Discs kept parallel to the screen: perspective stretches spheres into
+    // ovals away from the center, but a disc facing the camera stays round.
+    const disc = new CircleGeometry(1, 48);
+    // Marked transparent only to join the lines' render queue and draw after them.
+    const nodeMaterial = new MeshBasicMaterial({ transparent: true });
+    const mesh = new InstancedMesh(disc, nodeMaterial, count);
+    mesh.renderOrder = 1;
     group.add(mesh);
 
     const linePositions = new Float32Array(links.length * 6);
@@ -156,6 +160,7 @@ function NodeField({ progress }) {
         samplePalette(node.hue + scroll * 0.7, tint[i]).multiplyScalar(glow);
 
         dummy.position.copy(position);
+        dummy.quaternion.copy(inverse);
         dummy.scale.setScalar(node.size * (1 + node.hover * 0.9 + pulse * 0.8));
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
@@ -239,7 +244,7 @@ function NodeField({ progress }) {
       window.removeEventListener('pointermove', onPointerMove);
       document.documentElement.removeEventListener('pointerleave', onPointerLeave);
       window.removeEventListener('pointerdown', onPointerDown);
-      sphere.dispose();
+      disc.dispose();
       nodeMaterial.dispose();
       mesh.dispose();
       lineGeometry.dispose();
