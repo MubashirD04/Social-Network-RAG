@@ -67,13 +67,19 @@ export const linkStyle = (link, highlight) => {
   if (highlight && !highlight.linkIds.has(link.id)) {
     return { color: link.inferred ? INFERRED_COLOR : NEUTRAL_LINK_COLOR, opacity: 0.04, width: 0.5 };
   }
-  if (link.inferred) return { color: INFERRED_COLOR, opacity: highlight ? 0.9 : 0.5, width: highlight ? 2 : 1 };
-  if (highlight) return { color: CONFIRMED_REPLY_COLOR, opacity: 1, width: 2 };
-  if (isConfirmedReply(link)) return { color: CONFIRMED_REPLY_COLOR, opacity: 0.85, width: 1.5 };
+  if (link.inferred) return { color: INFERRED_COLOR, opacity: highlight ? 0.65 : 0.5, width: 1 };
+  // Selected links stay understated, leaving the pulse as the brightest thing.
+  if (highlight) return { color: CONFIRMED_REPLY_COLOR, opacity: 0.55, width: 1 };
+  if (isConfirmedReply(link)) return { color: CONFIRMED_REPLY_COLOR, opacity: 0.7, width: 1 };
   const community = sharedCommunity(link);
-  if (community !== null) return { color: communityColor(community), opacity: 0.8, width: 1 };
+  if (community !== null) return { color: communityColor(community), opacity: 0.55, width: 1 };
   return { color: NEUTRAL_LINK_COLOR, opacity: 0.25, width: 1 };
 };
+
+export const pulseColor = (inferred) => (inferred ? INFERRED_COLOR : CONFIRMED_REPLY_COLOR);
+
+// The comet's head is a paler tint of its color, so it reads as light.
+export const pulseHeadColor = (inferred) => (inferred ? '#E4ECF4' : '#FFF6CC');
 
 export const toRgba = (hex, opacity) => {
   const value = parseInt(hex.slice(1), 16);
