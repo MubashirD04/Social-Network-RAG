@@ -9,7 +9,8 @@ import Landing from './landing/Landing';
 import NodeBrowser from './NodeBrowser';
 import { analyseFile, searchMessages, setTopicCountInWorker } from './pipeline/client';
 import { buildVisibleGraph, computeHighlight, connectionSummary, expansionFor, formatGraphData, messagesForTopic, EXPAND_LIMIT } from './graph/graphData';
-import { COLORS, communityColor } from './graph/graphStyle';
+import { COLORS, communityColor, prefersReducedMotion } from './graph/graphStyle';
+import { buildPulsePlan } from './graph/pulse';
 import './App.css';
 
 // Split out so visitors who only read the landing page don't download a
@@ -26,6 +27,25 @@ const nodeId = {
 };
 
 const EMPTY_PROGRESS = { status: 'Starting…', runtime: null, model: null, embedding: null };
+
+const PULSE_STORAGE_KEY = 'social-rag-pulses';
+
+// Storage can be unavailable in private windows; the setting then lasts the visit.
+const loadPulsePreference = () => {
+  try {
+    return localStorage.getItem(PULSE_STORAGE_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+};
+
+const savePulsePreference = (enabled) => {
+  try {
+    localStorage.setItem(PULSE_STORAGE_KEY, enabled ? 'on' : 'off');
+  } catch {
+    // Nothing to do: the choice still applies until the page closes.
+  }
+};
 
 const MIN_TOPIC_COUNT = 5;
 const MAX_TOPIC_COUNT = 10;
@@ -83,6 +103,7 @@ function App() {
   const [expandedIds, setExpandedIds] = useState(() => new Set());
   const [wants3D, setWants3D] = useState(false);
   const [detailsSize, setDetailsSize] = useState('auto');
+  const [pulsesEnabled, setPulsesEnabled] = useState(loadPulsePreference);
   const [browserOpen, setBrowserOpen] = useState(false);
 
   // The graph view relies on fixed-position panels that never overflow the
@@ -142,6 +163,12 @@ function App() {
   useEffect(() => {
     if (focusRequest) graphRef.current?.focusNode(focusRequest.id);
   }, [focusRequest]);
+
+  // Rebuilt as the graph changes, so a looping pulse never runs along a link
+  // that's been filtered out or a node that's gone.
+  useEffect(() => {
+    graphRef.current?.pulse?.(pulsesEnabled ? buildPulsePlan(selectedNode, visibleGraphData) : null);
+  }, [selectedNode, visibleGraphData, is3D, pulsesEnabled]);
 
   const selectNode = useCallback((id) => {
     const node = nodeById.get(id);
@@ -522,6 +549,21 @@ function App() {
                     </button>
                   )}
                 </div>
+                {!prefersReducedMotion() && (
+                  <div className="topic-count-control">
+                    <label className="legend-check">
+                      <input
+                        type="checkbox"
+                        checked={pulsesEnabled}
+                        onChange={(e) => {
+                          setPulsesEnabled(e.target.checked);
+                          savePulsePreference(e.target.checked);
+                        }}
+                      />
+                      <span>Animate connections</span>
+                    </label>
+                  </div>
+                )}
                 <div className="legend-section-title">Key</div>
                 <div className="legend-item"><span className="dot legend-swatch-person"></span> Person (color: group, size: influence)</div>
                 <div className="legend-item"><span className="dot topic-dot legend-swatch-topic"></span> Topic</div>

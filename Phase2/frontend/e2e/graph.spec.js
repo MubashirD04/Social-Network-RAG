@@ -146,6 +146,42 @@ test.describe('graph view', () => {
     await expect.poll(height).toBeCloseTo(rail.height, 0);
   });
 
+  test('the pulse keeps looping while selected and the graph idles once deselected', async ({ page }) => {
+    const graph = page.locator('[data-pulsing]');
+    await pickFromBrowser(page, 'User 0');
+    await expect(graph).toHaveAttribute('data-pulsing', 'true');
+    await page.waitForTimeout(3000);
+    await expect(graph).toHaveAttribute('data-pulsing', 'true');
+
+    await page.getByRole('button', { name: /topic 0/ }).first().click();
+    await expect(graph).toHaveAttribute('data-pulsing', 'true');
+    await page.getByRole('button', { name: 'Close details' }).click();
+    await expect(graph).toHaveAttribute('data-pulsing', 'false');
+  });
+
+  test('pulses can be turned off, and the choice is remembered', async ({ page }) => {
+    const graph = page.locator('[data-pulsing]');
+    const toggle = page.getByRole('checkbox', { name: 'Animate connections' });
+    await pickFromBrowser(page, 'User 0');
+    await expect(graph).toHaveAttribute('data-pulsing', 'true');
+
+    await toggle.uncheck();
+    await expect(graph).toHaveAttribute('data-pulsing', 'false');
+    await page.getByRole('button', { name: 'Close details' }).click();
+    await page.getByRole('button', { name: /User 1/ }).first().click();
+    await expect(page.locator('.details-sidebar h2')).toHaveText('User 1');
+    await expect(graph).toHaveAttribute('data-pulsing', 'false');
+
+    await page.reload();
+    await uploadFixture(page);
+    await expect(toggle).not.toBeChecked();
+    await pickFromBrowser(page, 'User 0');
+    await expect(graph).toHaveAttribute('data-pulsing', 'false');
+
+    await toggle.check();
+    await expect(graph).toHaveAttribute('data-pulsing', 'true');
+  });
+
   test('Home returns to the landing page', async ({ page }) => {
     await page.getByRole('button', { name: 'Home' }).click();
     await expect(page.locator('h1')).toBeVisible();
@@ -273,6 +309,18 @@ test.describe('landing page', () => {
     await page.goto('/');
     await expect(page.locator('h1')).toBeVisible();
     await expect(page.locator('html.lenis')).toHaveCount(0);
+    await context.close();
+  });
+
+  test('reduced motion skips the pulse but keeps selection', async ({ browser }) => {
+    const context = await browser.newContext({ reducedMotion: 'reduce', baseURL: 'http://localhost:4173', viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    await useFakePipeline(page, syntheticGraph(30));
+    await page.goto('/');
+    await uploadFixture(page);
+    await pickFromBrowser(page, 'User 0');
+    await page.waitForTimeout(200);
+    await expect(page.locator('[data-pulsing]')).toHaveAttribute('data-pulsing', 'false');
     await context.close();
   });
 
